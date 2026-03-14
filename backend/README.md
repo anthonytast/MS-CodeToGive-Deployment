@@ -2,6 +2,7 @@
 
 ## Setup
 
+(Would suggest at least Python 3.11)
 ```bash
 cd backend
 python -m venv .venv
