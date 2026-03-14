@@ -2,6 +2,7 @@
 import uuid
 from typing import Literal
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict
 
@@ -187,6 +188,31 @@ async def get_my_joined_events(
 
     result = query.execute()
     return result.data
+
+
+# Get nearby food resources/pantries for an event using the Lemontree Data API
+@router.get("/{event_id}/nearby-pantries")
+async def get_nearby_pantries(event_id: str, count: int = Query(default=4, ge=1, le=10)):
+    # Fetch the event to get its lat/lng
+    result = get_supabase_admin().table("events").select("id, latitude, longitude").eq("id", event_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event = result.data[0]
+    if event["latitude"] is None or event["longitude"] is None:
+        raise HTTPException(status_code=422, detail="Event does not have a location set")
+
+    # Proxy request to Lemontree Data API
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://platform.foodhelpline.org/api/resources",
+            params={"lat": event["latitude"], "lng": event["longitude"], "take": count},
+        )
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=502, detail="Failed to fetch nearby pantries from Lemontree API")
+
+    return response.json()
 
 
 # Cancel an event (soft delete) — only the event leader can cancel it
