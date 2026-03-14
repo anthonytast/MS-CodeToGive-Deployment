@@ -6,7 +6,7 @@
 ```zsh
 cd backend
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
 pip install -r requirements.txt
 ```
 
@@ -36,7 +36,9 @@ backend/
 │   │   └── auth.py          # JWT dependency for protected routes
 │   └── api/
 │       └── routes/
-│           ├── auth.py      # /api/v1/auth/* (signup, signin, signout)
+│           ├── auth.py      # /api/v1/auth/* (signup, login, logout)
+│           ├── events.py    # /api/v1/events/* (CRUD + nearby resources)
+│           ├── admin.py     # /api/v1/admin/* (admin only)
 │           └── health.py    # /health
 └── requirements.txt
 ```
