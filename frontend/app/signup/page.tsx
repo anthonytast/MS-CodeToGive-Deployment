@@ -8,14 +8,14 @@ import styles from "./signup.module.css";
 
 /* ── Option lists ──────────────────────────────────────────── */
 const ROLE_OPTIONS = [
-  { value: "Event leader", label: "Event Leader" },
-  { value: "Event participant", label: "Event Participant" },
-  { value: "Event promoter", label: "Event Promoter" },
+  { value: "leader", label: "Event Leader" },
+  { value: "volunteer", label: "Event Participant" },
+  { value: "promoter", label: "Event Promoter" },
 ];
 
 const CATEGORY_OPTIONS = [
-  { value: "Corporate", label: "Corporate" },
-  { value: "Leadership group", label: "Leadership Group" },
+  { value: "corporate", label: "Corporate" },
+  { value: "leadership_group", label: "Leadership Group" },
   { value: "student", label: "Student" },
   { value: "other", label: "Other" },
 ];
@@ -125,13 +125,10 @@ export default function SignUpPage() {
             password,
             phone,
             role,
-            organization: category,
-            referral: referral || null,
-            // DB columns exist — uncomment once backend endpoint accepts them:
-            // location_name: location,
-            // languages,
-            // referral_source: discovery,         // "how did you find us"
-            // referral_code: referral || null,    // backend resolves referred_by_user_id from this?
+            category: category || null,
+            languages: languages.length > 0 ? languages : null,
+            referral_source: discovery || null, // how the user found Lemontree (e.g. "social_media", "friend_family")
+            referral_code: referral || null,    // code of the person who referred this user — backend resolves this to referred_by_user_id
           }),
         }
       );
