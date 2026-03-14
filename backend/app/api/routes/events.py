@@ -46,6 +46,8 @@ class EventUpdate(BaseModel):
     longitude: float | None = None
     volunteer_limit: int | None = None
     pantry_mode: Literal["none", "closest_pantries", "single_venue"] | None = None
+    pantry_count: int | None = None
+    pantry_venue_id: str | None = None
     flyer_language: Literal["en", "es"] | None = None
 
 
@@ -65,9 +67,15 @@ class EventResponse(BaseModel):
     latitude: float | None
     longitude: float | None
     volunteer_limit: int | None
+    current_signup_count: int
     pantry_mode: str
+    pantry_count: int | None
+    pantry_venue_id: str | None
     flyer_language: str
+    flyer_url: str | None
     shareable_link: str | None
+    created_at: str
+    updated_at: str
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
