@@ -53,3 +53,13 @@ async def get_all_events(skip: int = 0, limit: int = 20):
         "total": count_res.count,
         "events": response.data
     }
+@router.delete("/events/{event_id}")
+async def delete_event(event_id: str):
+    admin = get_supabase_admin()
+    
+    response = admin.table("events").delete().eq("id", event_id).execute()
+    
+    if not response.data:
+        raise HTTPException(status_code=404, detail="Event not found")
+        
+    return {"success": True, "message": "Event deleted successfully"}
