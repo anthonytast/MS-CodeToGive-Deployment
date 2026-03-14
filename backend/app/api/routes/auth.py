@@ -2,18 +2,33 @@
 single API rather than talking to Supabase directly."""
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
-
-from app.core.supabase import get_supabase_client
+from enum import Enum
+from app.core.auth import CurrentUser
+from app.core.supabase import get_supabase_admin, get_supabase_client
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
+class Role(Enum):
+    LEADER = 'Event leader'
+    PARTICIPANT = 'Event participant'
+    PROMOTER = 'Event promoter'
+
+class Organization(Enum):
+    CORPORATE = 'Corporate'
+    LEADERSHIP_GROUP = 'Leadership group'
+    STUDENT = 'student'
+    OTHER = 'other'
 
 class SignUpRequest(BaseModel):
+    name: str
     email: EmailStr
     password: str
+    phone: str
+    role: Role
+    organization: str
+    referral: str | None
 
-
-class SignInRequest(BaseModel):
+class LoginRequest(BaseModel):
     email: EmailStr
     password: str
 
@@ -21,14 +36,28 @@ class SignInRequest(BaseModel):
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 async def sign_up(body: SignUpRequest):
     client = get_supabase_client()
-    response = client.auth.sign_up({"email": body.email, "password": body.password})
+    response = client.auth.sign_up({
+        "email": body.email,
+        "password": body.password,
+        "options": {"data": {"name": body.name}},
+    })
     if response.user is None:
         raise HTTPException(status_code=400, detail="Sign-up failed")
+    if not response.user.identities:
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+
+    admin = get_supabase_admin()
+    admin.table("User").insert({
+        "Name": body.name,
+        "Email": body.email,
+        "Role": body.role.value,
+    }).execute()
+
     return {"message": "Check your email to confirm your account", "user_id": response.user.id}
 
 
-@router.post("/signin")
-async def sign_in(body: SignInRequest):
+@router.post("/login")
+async def log_in(body: LoginRequest):
     client = get_supabase_client()
     response = client.auth.sign_in_with_password({"email": body.email, "password": body.password})
     if response.user is None:
@@ -40,8 +69,7 @@ async def sign_in(body: SignInRequest):
     }
 
 
-@router.post("/signout")
-async def sign_out(access_token: str):
-    client = get_supabase_client()
-    client.auth.sign_out()
+@router.post("/logout")
+async def log_out(current_user: CurrentUser):
+    get_supabase_admin().auth.admin.sign_out(current_user["sub"], scope="global")
     return {"message": "Signed out"}
