@@ -28,9 +28,9 @@ class EventCreate(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     volunteer_limit: int | None = None
-    pantry_mode: Literal["none", "closest_pantries", "single_venue"] = "none"
-    pantry_count: int | None = None       # used when pantry_mode = "closest_pantries"
-    pantry_venue_id: str | None = None    # used when pantry_mode = "single_venue"
+    pantry_mode: Literal["none", "nearby_resources", "single_resource"] = "none"
+    resource_count: int | None = None     # used when pantry_mode = "nearby_resources"
+    resource_id: str | None = None        # Lemontree API resource ID for single_resource mode
     flyer_language: Literal["en", "es"] = "en"
 
 
@@ -46,9 +46,9 @@ class EventUpdate(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     volunteer_limit: int | None = None
-    pantry_mode: Literal["none", "closest_pantries", "single_venue"] | None = None
-    pantry_count: int | None = None
-    pantry_venue_id: str | None = None
+    pantry_mode: Literal["none", "nearby_resources", "single_resource"] | None = None
+    resource_count: int | None = None
+    resource_id: str | None = None
     flyer_language: Literal["en", "es"] | None = None
 
 
@@ -70,13 +70,13 @@ class EventResponse(BaseModel):
     volunteer_limit: int | None
     current_signup_count: int
     pantry_mode: str
-    pantry_count: int | None
-    pantry_venue_id: str | None
+    resource_count: int | None
+    resource_id: str | None
     flyer_language: str
     flyer_url: str | None
     shareable_link: str | None
-    created_at: str
-    updated_at: str
+    created_at: str | None
+    updated_at: str | None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -123,37 +123,6 @@ async def create_event(body: EventCreate, current_user: CurrentUser):
     return result.data[0]
 
 
-@router.get("/{event_id}", response_model=EventResponse)
-async def get_event(event_id: str):
-    result = get_supabase_admin().table("events").select("*").eq("id", event_id).execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    return result.data[0]
-
-
-@router.put("/{event_id}", response_model=EventResponse)
-async def update_event(event_id: str, body: EventUpdate, current_user: CurrentUser):
-    # Fetch existing event
-    result = get_supabase_admin().table("events").select("*").eq("id", event_id).execute()
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    event = result.data[0]
-    if event["event_leader_id"] != current_user["sub"]:
-        raise HTTPException(status_code=403, detail="Not authorized to update this event")
-
-    update_data = body.model_dump(exclude_none=True)
-    if not update_data:
-        raise HTTPException(status_code=422, detail="No fields provided to update")
-
-    updated = get_supabase_admin().table("events").update(update_data).eq("id", event_id).execute()
-    if not updated.data:
-        raise HTTPException(status_code=500, detail="Failed to update event")
-
-    return updated.data[0]
-
-
 # Get all events created by the current user, optionally filtered by status
 @router.get("/my/created", response_model=list[EventResponse])
 async def get_my_created_events(
@@ -190,9 +159,40 @@ async def get_my_joined_events(
     return result.data
 
 
+@router.get("/{event_id}", response_model=EventResponse)
+async def get_event(event_id: str):
+    result = get_supabase_admin().table("events").select("*").eq("id", event_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return result.data[0]
+
+
+@router.put("/{event_id}", response_model=EventResponse)
+async def update_event(event_id: str, body: EventUpdate, current_user: CurrentUser):
+    # Fetch existing event
+    result = get_supabase_admin().table("events").select("*").eq("id", event_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    event = result.data[0]
+    if event["event_leader_id"] != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized to update this event")
+
+    update_data = body.model_dump(exclude_none=True)
+    if not update_data:
+        raise HTTPException(status_code=422, detail="No fields provided to update")
+
+    updated = get_supabase_admin().table("events").update(update_data).eq("id", event_id).execute()
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Failed to update event")
+
+    return updated.data[0]
+
+
 # Get nearby food resources/pantries for an event using the Lemontree Data API
-@router.get("/{event_id}/nearby-pantries")
-async def get_nearby_pantries(event_id: str, count: int = Query(default=4, ge=1, le=10)):
+@router.get("/{event_id}/nearby-resources")
+async def get_nearby_resources(event_id: str, count: int = Query(default=4, ge=1, le=10)):
     # Fetch the event to get its lat/lng
     result = get_supabase_admin().table("events").select("id, latitude, longitude").eq("id", event_id).execute()
     if not result.data:
