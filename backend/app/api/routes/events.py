@@ -75,8 +75,8 @@ class EventResponse(BaseModel):
     flyer_language: str
     flyer_url: str | None
     shareable_link: str | None
-    created_at: str
-    updated_at: str
+    created_at: str | None
+    updated_at: str | None
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
