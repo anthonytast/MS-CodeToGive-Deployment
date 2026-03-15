@@ -51,6 +51,7 @@ export default function ProfilePage() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [eventHistory, setEventHistory] = useState<EventHistoryItem[]>([]);
+  const [rank, setRank] = useState<number | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -99,16 +100,30 @@ export default function ProfilePage() {
         };
         const authHeader = { Authorization: `Bearer ${token}` };
 
-        const [userRes, createdRes, joinedRes] = await Promise.all([
+        const [userRes, createdRes, joinedRes, pointsRes, leaderboardRes] = await Promise.all([
           fetch(`${SUPABASE_URL}/rest/v1/users?id=eq.${userId}&select=*`, { headers: supabaseHeaders }),
           fetch(`${API_URL}/api/v1/events/my/created`, { headers: authHeader }),
           fetch(`${API_URL}/api/v1/events/my/joined`, { headers: authHeader }),
+          fetch(`${API_URL}/api/v1/points/me`, { headers: authHeader }),
+          fetch(`${API_URL}/api/v1/leaderboard?limit=100`),
         ]);
 
         const userData = await userRes.json();
-        console.log("[profile] users row:", userData);
         if (Array.isArray(userData) && userData.length > 0) {
-          setUser(userData[0]);
+          const profileRow = userData[0];
+          // Prefer live total_points from points endpoint
+          if (pointsRes.ok) {
+            const pointsData = await pointsRes.json();
+            profileRow.total_points = pointsData.total_points ?? profileRow.total_points;
+          }
+          setUser(profileRow);
+        }
+
+        // Determine rank from leaderboard
+        if (leaderboardRes.ok) {
+          const lb = await leaderboardRes.json();
+          const entry = lb.leaders?.find((l: { id: string; rank: number }) => l.id === userId);
+          if (entry) setRank(entry.rank);
         }
 
         const created = await createdRes.json();
@@ -250,7 +265,7 @@ export default function ProfilePage() {
                   </div>
                   <div className={styles.xpRow}>
                     <span className={styles.xpLabel}>Rank</span>
-                    <span className={styles.xpValue}>—</span>
+                    <span className={styles.xpValue}>{rank !== null ? `#${rank}` : "—"}</span>
                   </div>
                 </div>
 
