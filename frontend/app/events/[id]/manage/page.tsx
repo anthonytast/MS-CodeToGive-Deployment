@@ -73,6 +73,7 @@ export default function ManageEventPage() {
   const [photoSuccess, setPhotoSuccess] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messages, setMessages] = useState<{ id: string; content: string; message_type: string; sent_at: string }[]>([]);
+  const [photos, setPhotos] = useState<{ id: string; photo_url: string; caption: string | null; uploaded_at: string }[]>([]);
 
   // ── Send Message ───────────────────────────────────────────────────────
 
@@ -104,6 +105,8 @@ export default function ManageEventPage() {
         body: form,
       });
       if (res.ok) {
+        const newPhoto = await res.json();
+        setPhotos(prev => [...prev, newPhoto]);
         setPhotoSuccess(true);
         setTimeout(() => setPhotoSuccess(false), 3000);
       }
@@ -138,10 +141,11 @@ export default function ManageEventPage() {
     try {
       const headers = { "Authorization": `Bearer ${token}` };
 
-      const [evRes, signupsRes, msgsRes] = await Promise.all([
+      const [evRes, signupsRes, msgsRes, photosRes] = await Promise.all([
         fetch(`${API_URL}/api/v1/events/${eventId}`, { headers }),
         fetch(`${API_URL}/api/v1/events/${eventId}/signups`, { headers }),
         fetch(`${API_URL}/api/v1/events/${eventId}/messages`, { headers }),
+        fetch(`${API_URL}/api/v1/events/${eventId}/photos`),
       ]);
 
       if (!evRes.ok) {
@@ -160,6 +164,7 @@ export default function ManageEventPage() {
       setEvent(evData);
       setSignups(signupsData);
       if (msgsRes.ok) setMessages(await msgsRes.json());
+      if (photosRes.ok) setPhotos(await photosRes.json());
     } catch {
       setError("Network error. Check your connection.");
     } finally {
@@ -473,7 +478,7 @@ export default function ManageEventPage() {
 
                     <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
                       <ClustersPanel compact />
-                      <ShowcasePanel onUploadPhoto={handleUploadPhoto} uploading={uploadingPhoto} success={photoSuccess} />
+                      <ShowcasePanel onUploadPhoto={handleUploadPhoto} uploading={uploadingPhoto} success={photoSuccess} photos={photos} />
                     </div>
                   </div>
 
@@ -813,11 +818,13 @@ function MessageHistoryPanel({ messages }: { messages: { id: string; content: st
   );
 }
 
-function ShowcasePanel({ onUploadPhoto, uploading, success }: {
+function ShowcasePanel({ onUploadPhoto, uploading, success, photos }: {
   onUploadPhoto: (file: File) => Promise<void>;
   uploading: boolean;
   success: boolean;
+  photos: { id: string; photo_url: string; caption: string | null; uploaded_at: string }[];
 }) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   function triggerUpload() {
     const input = document.createElement("input");
@@ -829,6 +836,23 @@ function ShowcasePanel({ onUploadPhoto, uploading, success }: {
     };
     input.click();
   }
+
+  function openLightbox(i: number) { setLightboxIndex(i); }
+  function closeLightbox() { setLightboxIndex(null); }
+  function prev() { setLightboxIndex(i => i !== null ? (i - 1 + photos.length) % photos.length : null); }
+  function next() { setLightboxIndex(i => i !== null ? (i + 1) % photos.length : null); }
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+      else if (e.key === "Escape") closeLightbox();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxIndex, photos.length]);
 
   return (
     <div>
@@ -875,6 +899,93 @@ function ShowcasePanel({ onUploadPhoto, uploading, success }: {
           <span className="lt-badge lt-badge--active">+5</span>
         </div>
       </div>
+
+      {/* Photo grid */}
+      {photos.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--lt-text-secondary)" }}>
+            UPLOADED PHOTOS ({photos.length})
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {photos.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() => openLightbox(i)}
+                style={{ display: "block", aspectRatio: "1", borderRadius: "var(--lt-radius-sm)", overflow: "hidden", border: "none", padding: 0, cursor: "pointer" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.photo_url}
+                  alt={p.caption ?? "Event photo"}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.2s" }}
+                  onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.05)")}
+                  onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <div
+          onClick={closeLightbox}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            backgroundColor: "rgba(0,0,0,0.9)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {/* Close */}
+          <button
+            onClick={closeLightbox}
+            style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: "white", fontSize: 32, cursor: "pointer", lineHeight: 1, zIndex: 101 }}
+          >
+            ✕
+          </button>
+
+          {/* Counter */}
+          <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600 }}>
+            {lightboxIndex + 1} / {photos.length}
+          </span>
+
+          {/* Prev */}
+          {photos.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); prev(); }}
+              style={{ position: "absolute", left: 16, background: "rgba(255,255,255,0.12)", border: "none", color: "white", fontSize: 28, cursor: "pointer", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 101 }}
+            >
+              ‹
+            </button>
+          )}
+
+          {/* Image */}
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "85vh", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photos[lightboxIndex].photo_url}
+              alt={photos[lightboxIndex].caption ?? "Event photo"}
+              style={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }}
+            />
+            {photos[lightboxIndex].caption && (
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.8)", fontSize: 14, textAlign: "center" }}>
+                {photos[lightboxIndex].caption}
+              </p>
+            )}
+          </div>
+
+          {/* Next */}
+          {photos.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); next(); }}
+              style={{ position: "absolute", right: 16, background: "rgba(255,255,255,0.12)", border: "none", color: "white", fontSize: 28, cursor: "pointer", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 101 }}
+            >
+              ›
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
