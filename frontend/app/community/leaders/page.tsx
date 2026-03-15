@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 
 const C = {
   yellow:      '#fecc0e',
@@ -75,7 +77,6 @@ function Avatar({ initials, color, size = 40 }: { initials: string; color: strin
   );
 }
 
-// SVG trophy icon for podium
 function TrophyIcon({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -89,7 +90,6 @@ function TrophyIcon({ size = 16, color = 'currentColor' }: { size?: number; colo
   );
 }
 
-// Minimal badge — hexagon shape, no emoji
 function Badge({ color, earned, label }: { color: string; earned: boolean; label: string }) {
   const c = earned ? color : C.border;
   const textC = earned ? (color === C.yellow ? C.text : color) : C.textMuted;
@@ -117,7 +117,6 @@ function Badge({ color, earned, label }: { color: string; earned: boolean; label
   );
 }
 
-// Section card with left-border accent instead of coloured header
 function Card({ accentColor, title, children, noPad }: {
   accentColor: string; title: string; children: React.ReactNode; noPad?: boolean;
 }) {
@@ -155,12 +154,10 @@ export default function LeaderboardPage() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '0 32px', flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <img src="/logo-icon.png" alt="lemontree"
-            style={{ width: 42, height: 42, borderRadius: '50%', objectFit: 'cover' }} />
-          <img src="/logo-wordmark.svg" alt="lemontree"
-            style={{ height: 30, width: 'auto', filter: 'brightness(0)' }} />
-        </div>
+        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <Image src="/logo.svg" alt="Lemontree" width={42} height={42} priority />
+          <Image src="/lemontree_text_logo.svg" alt="Lemontree" width={112} height={24} priority style={{ filter: 'brightness(0)' }} />
+        </Link>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 7,
           background: 'rgba(45,42,38,0.12)', padding: '5px 14px',
@@ -219,7 +216,6 @@ export default function LeaderboardPage() {
                     <div key={v.rank} style={{
                       display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
                     }}>
-                      {/* Rank label above avatar */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         {isFirst && <TrophyIcon size={13} color={C.purple} />}
                         <span style={{
@@ -229,7 +225,6 @@ export default function LeaderboardPage() {
                       </div>
                       <Avatar initials={v.avatar} color={v.color} size={avatarSz} />
                       <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{v.name}</span>
-                      {/* Podium block */}
                       <div style={{
                         width: isFirst ? 96 : 80, height: blockH,
                         background: isFirst ? C.purple : C.blush,
@@ -301,7 +296,6 @@ export default function LeaderboardPage() {
                   </p>
                 </div>
               </div>
-              {/* Stats — restrained, no bright bg */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                 {[
                   { label: 'Events',   value: SPOTLIGHT.events,   accent: C.purple },
@@ -325,7 +319,6 @@ export default function LeaderboardPage() {
 
             {/* Badges Earned */}
             <Card accentColor={C.coral} title="Badges Earned">
-              {/* Grid — 3 per row, aligned */}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(3, 1fr)',
