@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -70,17 +70,22 @@ export default function AdminPage() {
   // Analytics
   const [totalUsers, setTotalUsers] = useState(0);
   const [totalEvents, setTotalEvents] = useState(0);
+  const [totalSignups, setTotalSignups] = useState(0);
+  const [rolesBreakdown, setRolesBreakdown] = useState<Record<string, number>>({});
 
   // Users
   const [users, setUsers] = useState<UserRow[]>([]);
   const [usersTotal, setUsersTotal] = useState(0);
   const [usersPage, setUsersPage] = useState(0);
   const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Events
   const [events, setEvents] = useState<EventRow[]>([]);
   const [eventsTotal, setEventsTotal] = useState(0);
   const [eventsPage, setEventsPage] = useState(0);
+  const [statusFilter, setStatusFilter] = useState("");
 
   // UI state
   const [deleteTarget, setDeleteTarget] = useState<EventRow | null>(null);
@@ -103,12 +108,16 @@ export default function AdminPage() {
     const data = await res.json();
     setTotalUsers(data.total_users ?? 0);
     setTotalEvents(data.total_events ?? 0);
+    setTotalSignups(data.total_signups ?? 0);
+    setRolesBreakdown(data.roles_breakdown ?? {});
   }, []);
 
   // Fetch users
-  const fetchUsers = useCallback(async (page: number) => {
+  const fetchUsers = useCallback(async (page: number, search: string = "") => {
     const skip = page * PAGE_SIZE;
-    const res = await apiFetch(`/admin/users?skip=${skip}&limit=${PAGE_SIZE}`);
+    let url = `/admin/users?skip=${skip}&limit=${PAGE_SIZE}`;
+    if (search) url += `&search=${encodeURIComponent(search)}`;
+    const res = await apiFetch(url);
     if (!res.ok) return;
     const data = await res.json();
     setUsers(data.users ?? []);
@@ -116,9 +125,11 @@ export default function AdminPage() {
   }, []);
 
   // Fetch events
-  const fetchEvents = useCallback(async (page: number) => {
+  const fetchEvents = useCallback(async (page: number, status: string = "") => {
     const skip = page * PAGE_SIZE;
-    const res = await apiFetch(`/admin/events?skip=${skip}&limit=${PAGE_SIZE}`);
+    let url = `/admin/events?skip=${skip}&limit=${PAGE_SIZE}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+    const res = await apiFetch(url);
     if (!res.ok) return;
     const data = await res.json();
     setEvents(data.events ?? []);
@@ -200,15 +211,32 @@ export default function AdminPage() {
     }
   }
 
+  // Search handler with debounce
+  function handleSearchChange(value: string) {
+    setSearchTerm(value);
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setUsersPage(0);
+      fetchUsers(0, value);
+    }, 400);
+  }
+
+  // Status filter handler
+  function handleStatusFilterChange(value: string) {
+    setStatusFilter(value);
+    setEventsPage(0);
+    fetchEvents(0, value);
+  }
+
   // Pagination handlers
   function handleUsersPageChange(page: number) {
     setUsersPage(page);
-    fetchUsers(page);
+    fetchUsers(page, searchTerm);
   }
 
   function handleEventsPageChange(page: number) {
     setEventsPage(page);
-    fetchEvents(page);
+    fetchEvents(page, statusFilter);
   }
 
   if (!isAuthorized) return null;
@@ -317,7 +345,7 @@ export default function AdminPage() {
               {/* Overview Tab */}
               {activeTab === "overview" && (
                 <div>
-                  <div className={styles.statsRow}>
+                  <div className={styles.statsRow} style={{ maxWidth: "none", gridTemplateColumns: "repeat(4, 1fr)" }}>
                     <StatsCard
                       icon={
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
@@ -338,7 +366,63 @@ export default function AdminPage() {
                       label="Total Events"
                       colorClass="lt-stat-card__icon--purple"
                     />
+                    <StatsCard
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                          <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                        </svg>
+                      }
+                      value={totalSignups}
+                      label="Total Signups"
+                      colorClass="lt-stat-card__icon--yellow"
+                    />
+                    <StatsCard
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z" clipRule="evenodd" />
+                        </svg>
+                      }
+                      value={Object.keys(rolesBreakdown).length}
+                      label="Active Roles"
+                      colorClass="lt-stat-card__icon--coral"
+                    />
                   </div>
+
+                  {/* Roles Breakdown */}
+                  {Object.keys(rolesBreakdown).length > 0 && (
+                    <div className={styles.tablePanel} style={{ marginTop: 24 }}>
+                      <div className={styles.tablePanelHeader}>
+                        <h3 className={styles.tablePanelTitle}>Roles Breakdown</h3>
+                      </div>
+                      <div style={{ padding: "0 24px 24px", display: "flex", gap: 16, flexWrap: "wrap" }}>
+                        {Object.entries(rolesBreakdown).map(([role, count]) => (
+                          <div
+                            key={role}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "12px 20px",
+                              background: "var(--lt-card-bg-muted)",
+                              borderRadius: "var(--lt-radius-sm)",
+                              minWidth: 140,
+                            }}
+                          >
+                            <span
+                              className={styles.roleBadge}
+                              data-role={role}
+                            >
+                              {role}
+                            </span>
+                            <span style={{ fontWeight: 700, fontSize: 20, color: "var(--lt-text-primary)" }}>
+                              {count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -347,6 +431,13 @@ export default function AdminPage() {
                 <div className={styles.tablePanel}>
                   <div className={styles.tablePanelHeader}>
                     <h3 className={styles.tablePanelTitle}>All Users</h3>
+                    <input
+                      type="text"
+                      className={styles.searchInput}
+                      placeholder="Search by name or email..."
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                    />
                   </div>
                   <div className={styles.tableScroll}>
                     {users.length === 0 ? (
@@ -431,6 +522,17 @@ export default function AdminPage() {
                 <div className={styles.tablePanel}>
                   <div className={styles.tablePanelHeader}>
                     <h3 className={styles.tablePanelTitle}>All Events</h3>
+                    <select
+                      className={styles.statusFilter}
+                      value={statusFilter}
+                      onChange={(e) => handleStatusFilterChange(e.target.value)}
+                    >
+                      <option value="">All Statuses</option>
+                      <option value="upcoming">Upcoming</option>
+                      <option value="active">Active</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
                   </div>
                   <div className={styles.tableScroll}>
                     {events.length === 0 ? (
