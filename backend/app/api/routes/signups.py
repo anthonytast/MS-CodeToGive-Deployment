@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
 
 from app.core.auth import CurrentUser
+from app.core.managers import is_authorized_manager
 from app.core.points import award_points, calculate_event_points
 from app.core.supabase import get_supabase_admin
 
@@ -185,10 +186,10 @@ async def list_event_signups(event_id: str, current_user: CurrentUser):
 
     user_result = db.table("users").select("role").eq("id", current_user["sub"]).maybe_single().execute()
     is_admin = user_result.data and user_result.data["role"] == "admin"
-    is_leader = event_result.data[0]["event_leader_id"] == current_user["sub"]
+    is_manager = is_authorized_manager(event_id, current_user["sub"])
 
-    if not is_leader and not is_admin:
-        raise HTTPException(status_code=403, detail="Only the event leader or an admin can view signups")
+    if not is_manager and not is_admin:
+        raise HTTPException(status_code=403, detail="Only the event leader, a co-manager, or an admin can view signups")
 
     signups = db.table("event_signups").select("*").eq("event_id", event_id).neq("status", "cancelled").execute()
 
@@ -223,9 +224,8 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
     if not event_result.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    event = event_result.data[0]
-    if event["event_leader_id"] != current_user["sub"]:
-        raise HTTPException(status_code=403, detail="Only the event leader can check in volunteers")
+    if not is_authorized_manager(event_id, current_user["sub"]):
+        raise HTTPException(status_code=403, detail="Only the event leader or a co-manager can check in volunteers")
 
     signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
     if not signup_result.data:
@@ -251,5 +251,31 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
             event_id=event_id,
             description=f"Attended event ({points // 10}hr)",
         )
+
+    return updated.data[0]
+
+
+@router.patch("/{event_id}/signups/{signup_id}/uncheck-in", response_model=SignupResponse)
+async def uncheck_in_volunteer(event_id: str, signup_id: str, current_user: CurrentUser):
+    """Undo a check-in — revert volunteer status to registered. Only the event leader can do this."""
+    db = get_supabase_admin()
+
+    event_result = db.table("events").select("id, event_leader_id").eq("id", event_id).execute()
+    if not event_result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if not is_authorized_manager(event_id, current_user["sub"]):
+        raise HTTPException(status_code=403, detail="Only the event leader or a co-manager can undo check-ins")
+
+    signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
+    if not signup_result.data:
+        raise HTTPException(status_code=404, detail="Signup not found")
+
+    if signup_result.data[0]["status"] != "attended":
+        raise HTTPException(status_code=422, detail="Volunteer is not currently checked in")
+
+    updated = db.table("event_signups").update({"status": "registered", "checked_in_at": None}).eq("id", signup_id).execute()
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Failed to undo check-in")
 
     return updated.data[0]

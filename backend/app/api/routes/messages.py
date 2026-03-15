@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.core.auth import CurrentUser
+from app.core.managers import is_authorized_manager
 from app.core.supabase import get_supabase_admin
 
 router = APIRouter(prefix="/events", tags=["messages"])
@@ -38,8 +39,8 @@ async def send_message(event_id: str, body: SendMessageRequest, current_user: Cu
     if not event.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if event.data["event_leader_id"] != current_user["sub"]:
-        raise HTTPException(status_code=403, detail="Only the event leader can send messages")
+    if not is_authorized_manager(event_id, current_user["sub"]):
+        raise HTTPException(status_code=403, detail="Only the event leader or a co-manager can send messages")
 
     if not body.content.strip():
         raise HTTPException(status_code=422, detail="Message content cannot be empty")
@@ -67,9 +68,7 @@ async def list_messages(event_id: str, current_user: CurrentUser):
     if not event.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    is_leader = event.data["event_leader_id"] == current_user["sub"]
-
-    if not is_leader:
+    if not is_authorized_manager(event_id, current_user["sub"]):
         signup = (
             db.table("event_signups")
             .select("id")
@@ -80,7 +79,7 @@ async def list_messages(event_id: str, current_user: CurrentUser):
             .execute()
         )
         if not signup.data:
-            raise HTTPException(status_code=403, detail="Only the event leader or a signed-up volunteer can view messages")
+            raise HTTPException(status_code=403, detail="Only the event leader, a co-manager, or a signed-up volunteer can view messages")
 
     result = db.table("event_messages").select("*").eq("event_id", event_id).order("sent_at").execute()
     return result.data
