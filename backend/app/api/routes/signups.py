@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr
 
 from app.core.auth import CurrentUser
-from app.core.managers import is_authorized_manager
 from app.core.points import award_points, calculate_event_points
 from app.core.supabase import get_supabase_admin
 
@@ -186,10 +185,10 @@ async def list_event_signups(event_id: str, current_user: CurrentUser):
 
     user_result = db.table("users").select("role").eq("id", current_user["sub"]).maybe_single().execute()
     is_admin = user_result.data and user_result.data["role"] == "admin"
-    is_manager = is_authorized_manager(event_id, current_user["sub"])
+    is_leader = event_result.data[0]["event_leader_id"] == current_user["sub"]
 
-    if not is_manager and not is_admin:
-        raise HTTPException(status_code=403, detail="Only the event leader, a co-manager, or an admin can view signups")
+    if not is_leader and not is_admin:
+        raise HTTPException(status_code=403, detail="Only the event leader or an admin can view signups")
 
     signups = db.table("event_signups").select("*").eq("event_id", event_id).neq("status", "cancelled").execute()
 
@@ -224,8 +223,8 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
     if not event_result.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if not is_authorized_manager(event_id, current_user["sub"]):
-        raise HTTPException(status_code=403, detail="Only the event leader or a co-manager can check in volunteers")
+    if event_result.data[0]["event_leader_id"] != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Only the event leader can check in volunteers")
 
     signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
     if not signup_result.data:
@@ -264,8 +263,8 @@ async def uncheck_in_volunteer(event_id: str, signup_id: str, current_user: Curr
     if not event_result.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if not is_authorized_manager(event_id, current_user["sub"]):
-        raise HTTPException(status_code=403, detail="Only the event leader or a co-manager can undo check-ins")
+    if event_result.data[0]["event_leader_id"] != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Only the event leader can undo check-ins")
 
     signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
     if not signup_result.data:

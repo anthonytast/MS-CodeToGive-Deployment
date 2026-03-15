@@ -6,7 +6,6 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
 
 from app.core.auth import CurrentUser
-from app.core.managers import is_authorized_manager
 from app.core.supabase import get_supabase_admin
 
 router = APIRouter(prefix="/events", tags=["photos"])
@@ -43,8 +42,8 @@ async def upload_photo(
     if not event.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    # Check user is leader, co-manager, or signed-up volunteer
-    if not is_authorized_manager(event_id, current_user["sub"]):
+    # Check user is leader or signed-up volunteer
+    if event.data["event_leader_id"] != current_user["sub"]:
         signup = (
             db.table("event_signups")
             .select("id")
@@ -55,7 +54,7 @@ async def upload_photo(
             .execute()
         )
         if not signup.data:
-            raise HTTPException(status_code=403, detail="Only the event leader, a co-manager, or a signed-up volunteer can upload photos")
+            raise HTTPException(status_code=403, detail="Only the event leader or a signed-up volunteer can upload photos")
 
     # Validate file type
     if file.content_type not in ALLOWED_CONTENT_TYPES:
