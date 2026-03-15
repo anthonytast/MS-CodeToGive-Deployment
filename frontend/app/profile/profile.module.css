@@ -1,0 +1,364 @@
+.profileMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--lt-bg);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 32px;
+  background: var(--lt-yellow);
+  border-bottom: 1px solid var(--lt-border);
+}
+
+.profileContent {
+  padding: 32px;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.rightColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Profile Card ──────────────────────────────── */
+
+.profileCard {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatarWrapper {
+  margin-top: 8px;
+}
+
+.avatarLarge {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--lt-teal) 0%, var(--lt-purple) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  border: 4px solid white;
+  box-shadow: var(--lt-shadow-elevated);
+}
+
+.profileName {
+  font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--lt-text-primary);
+  margin: 0;
+}
+
+.profilePills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.xpSection {
+  width: 100%;
+  background: var(--lt-card-bg-muted);
+  border-radius: var(--lt-radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.xpRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.xpLabel {
+  font-size: 13px;
+  color: var(--lt-text-secondary);
+}
+
+.xpValue {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--lt-text-primary);
+}
+
+.progressSection {
+  width: 100%;
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--lt-text-muted);
+  margin-bottom: 6px;
+}
+
+.progressBar {
+  width: 100%;
+  height: 8px;
+  background: var(--lt-border);
+  border-radius: var(--lt-radius-full);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--lt-teal);
+  border-radius: var(--lt-radius-full);
+  transition: width 0.4s ease;
+}
+
+/* ── Badges ──────────────────────────────────── */
+
+.badgesGrid {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.badgeItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+
+.badgeIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid var(--lt-border);
+}
+
+.badgeEarned .badgeIcon {
+  background: var(--lt-yellow-light);
+  border-color: var(--lt-yellow);
+}
+
+.badgeLocked .badgeIcon {
+  background: var(--lt-card-bg-muted);
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+.badgeLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--lt-text-secondary);
+  text-align: center;
+}
+
+/* ── Personal Info ───────────────────────────── */
+
+.infoHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.editBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lt-teal);
+  background: var(--lt-teal-light);
+  border: none;
+  border-radius: var(--lt-radius-sm);
+  cursor: pointer;
+  transition: background var(--lt-transition);
+}
+
+.editBtn:hover {
+  background: #b8e4dc;
+}
+
+.editActions {
+  display: flex;
+  gap: 8px;
+}
+
+.saveBtn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--lt-teal);
+  border: none;
+  border-radius: var(--lt-radius-sm);
+  cursor: pointer;
+  min-width: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.saveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancelBtn {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lt-text-secondary);
+  background: var(--lt-card-bg-muted);
+  border: none;
+  border-radius: var(--lt-radius-sm);
+  cursor: pointer;
+}
+
+.infoGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.infoRow {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lt-border);
+  gap: 16px;
+}
+
+.infoRow:last-child {
+  border-bottom: none;
+}
+
+.infoLabel {
+  width: 130px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lt-text-secondary);
+}
+
+.infoValue {
+  font-size: 14px;
+  color: var(--lt-text-primary);
+  flex: 1;
+}
+
+.referralRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.referralCode {
+  font-family: monospace;
+  background: var(--lt-card-bg-muted);
+  padding: 2px 8px;
+  border-radius: var(--lt-radius-sm);
+  font-size: 13px;
+  color: var(--lt-teal);
+  font-weight: 600;
+}
+
+.copyBtn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lt-teal);
+  background: var(--lt-teal-light);
+  border: none;
+  border-radius: var(--lt-radius-sm);
+  cursor: pointer;
+  transition: background var(--lt-transition), color var(--lt-transition);
+  white-space: nowrap;
+}
+
+.copyBtn:hover {
+  background: #b8e4dc;
+}
+
+/* ── Event History ───────────────────────────── */
+
+.historyList {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.historyItem {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lt-border);
+}
+
+.historyItem:last-child {
+  border-bottom: none;
+}
+
+.historyDate {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lt-text-muted);
+  min-width: 70px;
+}
+
+.historyInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.historyTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lt-text-primary);
+}
+
+.historyLocation {
+  font-size: 12px;
+  color: var(--lt-text-muted);
+}
+
+/* ── Responsive ──────────────────────────────── */
+
+@media (max-width: 900px) {
+  .profileContent {
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+}
