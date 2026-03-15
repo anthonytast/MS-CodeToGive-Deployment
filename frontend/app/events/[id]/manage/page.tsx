@@ -64,10 +64,56 @@ export default function ManageEventPage() {
   const [signups, setSignups] = useState<Signup[]>([]);
   const [toggling, setToggling] = useState(false);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
+  const [uncheckingIn, setUncheckingIn] = useState<string | null>(null);
   const [userInitials, setUserInitials] = useState("U");
   const [userName, setUserName] = useState("User");
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoSuccess, setPhotoSuccess] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messages, setMessages] = useState<{ id: string; content: string; message_type: string; sent_at: string }[]>([]);
+  const [photos, setPhotos] = useState<{ id: string; photo_url: string; caption: string | null; uploaded_at: string }[]>([]);
+
+  // ── Send Message ───────────────────────────────────────────────────────
+
+  async function handleSendMessage(content: string, messageType: "announcement" | "reminder" | "appreciation") {
+    if (!token || !content.trim()) return;
+    const res = await fetch(`${API_URL}/api/v1/events/${eventId}/messages`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content, message_type: messageType }),
+    });
+    if (res.ok) {
+      const newMsg = await res.json();
+      setMessages(prev => [...prev, newMsg]);
+    }
+  }
+
+  // ── Upload Photo ───────────────────────────────────────────────────────
+
+  async function handleUploadPhoto(file: File) {
+    if (!token || uploadingPhoto) return;
+    setUploadingPhoto(true);
+    setPhotoSuccess(false);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${API_URL}/api/v1/events/${eventId}/photos`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: form,
+      });
+      if (res.ok) {
+        const newPhoto = await res.json();
+        setPhotos(prev => [...prev, newPhoto]);
+        setPhotoSuccess(true);
+        setTimeout(() => setPhotoSuccess(false), 3000);
+      }
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -95,9 +141,11 @@ export default function ManageEventPage() {
     try {
       const headers = { "Authorization": `Bearer ${token}` };
 
-      const [evRes, signupsRes] = await Promise.all([
+      const [evRes, signupsRes, msgsRes, photosRes] = await Promise.all([
         fetch(`${API_URL}/api/v1/events/${eventId}`, { headers }),
         fetch(`${API_URL}/api/v1/events/${eventId}/signups`, { headers }),
+        fetch(`${API_URL}/api/v1/events/${eventId}/messages`, { headers }),
+        fetch(`${API_URL}/api/v1/events/${eventId}/photos`),
       ]);
 
       if (!evRes.ok) {
@@ -115,6 +163,8 @@ export default function ManageEventPage() {
 
       setEvent(evData);
       setSignups(signupsData);
+      if (msgsRes.ok) setMessages(await msgsRes.json());
+      if (photosRes.ok) setPhotos(await photosRes.json());
     } catch {
       setError("Network error. Check your connection.");
     } finally {
@@ -151,7 +201,6 @@ export default function ManageEventPage() {
   async function handleCheckIn(signupId: string) {
     if (!token || checkingIn) return;
     setCheckingIn(signupId);
-
     try {
       const res = await fetch(`${API_URL}/api/v1/events/${eventId}/signups/${signupId}/check-in`, {
         method: "PATCH",
@@ -167,13 +216,30 @@ export default function ManageEventPage() {
     }
   }
 
+  async function handleUncheckIn(signupId: string) {
+    if (!token || uncheckingIn) return;
+    setUncheckingIn(signupId);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/events/${eventId}/signups/${signupId}/uncheck-in`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setSignups(prev =>
+          prev.map(s => s.id === signupId ? { ...s, status: "registered", checked_in_at: null } : s)
+        );
+      }
+    } finally {
+      setUncheckingIn(null);
+    }
+  }
+
   // ── Derived data ───────────────────────────────────────────────────────
 
   const activeSignups = signups.filter(s => s.status !== "cancelled");
   const checkedIn = activeSignups.filter(s => s.status === "attended").length;
   const total = activeSignups.length;
   const isOpen = event?.status === "active";
-
   // ── Loading / Error states ─────────────────────────────────────────────
 
   if (!token) return null;
@@ -295,16 +361,13 @@ export default function ManageEventPage() {
                       Edit Event ✎
                     </Link>
 
-                    {/* Send Message placeholder */}
-                    <div style={{
-                      flex: 1, minWidth: 200,
-                      backgroundColor: "var(--lt-card-bg-muted)", padding: "12px 20px",
-                      borderRadius: "var(--lt-radius-full)", color: "var(--lt-text-muted)",
-                      fontSize: 15, display: "flex", alignItems: "center",
-                      cursor: "not-allowed",
-                    }}>
-                      Send Message...
-                    </div>
+                    <button
+                      onClick={() => setShowMessageModal(true)}
+                      className="lt-btn"
+                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-teal)", color: "white", fontWeight: 600, fontSize: 14 }}
+                    >
+                      📢 Message Volunteers
+                    </button>
                   </div>
 
                   <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
@@ -317,73 +380,110 @@ export default function ManageEventPage() {
                         signups={activeSignups}
                         showAction={false}
                         onCheckIn={handleCheckIn}
+                        onUncheckIn={handleUncheckIn}
                         checkingIn={checkingIn}
+                        uncheckingIn={uncheckingIn}
                       />
                     </div>
 
-                    {/* Team Clusters placeholder */}
+                    {/* Right column: clusters */}
                     <ClustersPanel />
                   </div>
+
+                  <MessageHistoryPanel messages={messages} />
                 </div>
               )}
 
               {/* ── DURING EVENT ───────────────────────────────── */}
               {activeTab === "during" && (
-                <div className="animate-fade-in" style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-                  {/* Volunteers with check-in */}
-                  <div style={{ flex: "1 1 55%", minWidth: 280 }}>
-                    <VolunteerList
-                      signups={activeSignups}
-                      showAction
-                      onCheckIn={handleCheckIn}
-                      checkingIn={checkingIn}
-                    />
+                <>
+                  {/* Action bar */}
+                  <div style={{ display: "flex", gap: 12, marginBottom: 32, flexWrap: "wrap", alignItems: "center" }}>
+                    <Link
+                      href={`/events/${eventId}/edit`}
+                      className="lt-btn"
+                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-card-bg-muted)", color: "var(--lt-text-primary)" }}
+                    >
+                      Edit Event ✎
+                    </Link>
+                    <button
+                      onClick={() => setShowMessageModal(true)}
+                      className="lt-btn"
+                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-teal)", color: "white", fontWeight: 600, fontSize: 14 }}
+                    >
+                      📢 Message Volunteers
+                    </button>
                   </div>
 
-                  <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
-                    {/* Send Message placeholder */}
-                    <div style={{
-                      backgroundColor: "var(--lt-card-bg-muted)", padding: "14px 20px",
-                      borderRadius: "var(--lt-radius-full)", color: "var(--lt-text-muted)",
-                      fontSize: 15, cursor: "not-allowed",
-                    }}>
-                      Send Message...
+                  <div className="animate-fade-in" style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+                    {/* Volunteers with check-in */}
+                    <div style={{ flex: "1 1 55%", minWidth: 280 }}>
+                      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--lt-text-primary)" }}>
+                        Volunteers ({checkedIn}/{total} checked in)
+                      </h2>
+                      <VolunteerList
+                        signups={activeSignups}
+                        showAction
+                        onCheckIn={handleCheckIn}
+                        onUncheckIn={handleUncheckIn}
+                        checkingIn={checkingIn}
+                        uncheckingIn={uncheckingIn}
+                      />
                     </div>
+
                     <ClustersPanel />
                   </div>
-                </div>
+
+                  <MessageHistoryPanel messages={messages} />
+                </>
               )}
 
               {/* ── POST-EVENT ─────────────────────────────────── */}
               {activeTab === "post" && (
-                <div className="animate-fade-in" style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
-                  {/* Final attendance */}
-                  <div style={{ flex: "1 1 55%", minWidth: 280 }}>
-                    <VolunteerList
-                      signups={activeSignups}
-                      showAction={false}
-                      onCheckIn={handleCheckIn}
-                      checkingIn={checkingIn}
-                      postEvent
-                    />
+                <>
+                  {/* Action bar */}
+                  <div style={{ display: "flex", gap: 12, marginBottom: 32, flexWrap: "wrap", alignItems: "center" }}>
+                    <Link
+                      href={`/events/${eventId}/edit`}
+                      className="lt-btn"
+                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-card-bg-muted)", color: "var(--lt-text-primary)" }}
+                    >
+                      Edit Event ✎
+                    </Link>
+                    <button
+                      onClick={() => setShowMessageModal(true)}
+                      className="lt-btn"
+                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-teal)", color: "white", fontWeight: 600, fontSize: 14 }}
+                    >
+                      📢 Message Volunteers
+                    </button>
                   </div>
 
-                  <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
-                    {/* Send Message placeholder */}
-                    <div style={{
-                      backgroundColor: "var(--lt-card-bg-muted)", padding: "14px 20px",
-                      borderRadius: "var(--lt-radius-full)", color: "var(--lt-text-muted)",
-                      fontSize: 15, cursor: "not-allowed",
-                    }}>
-                      Send Message...
+                  <div className="animate-fade-in" style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+                    {/* Final attendance */}
+                    <div style={{ flex: "1 1 55%", minWidth: 280 }}>
+                      <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--lt-text-primary)" }}>
+                        Volunteers ({checkedIn}/{total} attended)
+                      </h2>
+                      <VolunteerList
+                        signups={activeSignups}
+                        showAction={false}
+                        onCheckIn={handleCheckIn}
+                        onUncheckIn={handleUncheckIn}
+                        checkingIn={checkingIn}
+                        uncheckingIn={uncheckingIn}
+                        postEvent
+                      />
                     </div>
 
-                    <ClustersPanel compact />
-
-                    {/* Showcase Your Service */}
-                    <ShowcasePanel />
+                    <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
+                      <ClustersPanel compact />
+                      <ShowcasePanel onUploadPhoto={handleUploadPhoto} uploading={uploadingPhoto} success={photoSuccess} photos={photos} />
+                    </div>
                   </div>
-                </div>
+
+                  <MessageHistoryPanel messages={messages} />
+                </>
               )}
             </>
           ) : null}
@@ -392,6 +492,14 @@ export default function ManageEventPage() {
 
       {/* Mobile sidebar toggle */}
       <button className="lt-sidebar-toggle" onClick={() => setSidebarOpen(true)} aria-label="Open menu">☰</button>
+
+      {/* Message Modal */}
+      {showMessageModal && (
+        <MessageModal
+          onSend={handleSendMessage}
+          onClose={() => setShowMessageModal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -402,88 +510,129 @@ function VolunteerList({
   signups,
   showAction,
   onCheckIn,
+  onUncheckIn,
   checkingIn,
+  uncheckingIn,
   postEvent = false,
 }: {
   signups: Signup[];
   showAction: boolean;
   onCheckIn: (id: string) => void;
+  onUncheckIn: (id: string) => void;
   checkingIn: string | null;
+  uncheckingIn: string | null;
   postEvent?: boolean;
 }) {
-  if (signups.length === 0) {
-    return (
-      <div className="lt-panel" style={{ padding: "32px 24px", textAlign: "center", color: "var(--lt-text-secondary)" }}>
-        No volunteers signed up yet.
-      </div>
-    );
-  }
+  const [search, setSearch] = useState("");
+
+  const filtered = search.trim()
+    ? signups.filter(s =>
+        (s.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+        (s.email ?? "").toLowerCase().includes(search.toLowerCase())
+      )
+    : signups;
 
   return (
-    <div style={{ backgroundColor: "var(--lt-card-bg-muted)", borderRadius: "var(--lt-radius-md)", padding: "8px 24px" }}>
-      {signups.map((s, i) => {
-        const isLast = i === signups.length - 1;
-        const attended = s.status === "attended";
-        const initials = getInitials(s.name);
-        const displayName = s.name ?? "Guest";
-        const displaySub = s.email ?? "—";
+    <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+      {/* Search bar */}
+      <div style={{ position: "relative", marginBottom: 10 }}>
+        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", fontSize: 14, color: "var(--lt-text-muted)", pointerEvents: "none" }}>🔍</span>
+        <input
+          type="text"
+          placeholder="Search volunteers…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="lt-input"
+          style={{ width: "100%", paddingLeft: 34, boxSizing: "border-box" }}
+        />
+      </div>
 
-        let badge: React.ReactNode = null;
-        if (showAction) {
-          // During event: click Absent to check in
-          badge = attended ? (
-            <span className="lt-badge lt-badge--completed">Checked In</span>
-          ) : (
-            <button
-              onClick={() => onCheckIn(s.id)}
-              disabled={checkingIn === s.id}
-              style={{
-                padding: "4px 12px", borderRadius: "var(--lt-radius-full)",
-                fontSize: 13, fontWeight: 600, border: "none", cursor: "pointer",
-                backgroundColor: "var(--lt-card-bg-white)", color: "var(--lt-text-secondary)",
-                opacity: checkingIn === s.id ? 0.6 : 1,
-                transition: "var(--lt-transition)",
-              }}
-              title="Click to check in"
-            >
-              {checkingIn === s.id ? "…" : "Absent"}
-            </button>
-          );
-        } else if (postEvent) {
-          badge = attended ? (
-            <span className="lt-badge lt-badge--completed">Checked In</span>
-          ) : (
-            <span style={{ padding: "4px 12px", borderRadius: "var(--lt-radius-full)", fontSize: 13, fontWeight: 600, backgroundColor: "var(--lt-error-bg)", color: "var(--lt-error)" }}>
-              Not Checked In
-            </span>
-          );
-        }
+      {filtered.length === 0 ? (
+        <div className="lt-panel" style={{ padding: "32px 24px", textAlign: "center", color: "var(--lt-text-secondary)" }}>
+          {signups.length === 0 ? "No volunteers signed up yet." : "No volunteers match your search."}
+        </div>
+      ) : (
+        <div style={{ backgroundColor: "var(--lt-card-bg-muted)", borderRadius: "var(--lt-radius-md)", padding: "8px 24px", maxHeight: 420, overflowY: "auto" }}>
+          {filtered.map((s, i) => {
+            const isLast = i === filtered.length - 1;
+            const attended = s.status === "attended";
+            const initials = getInitials(s.name);
+            const displayName = s.name ?? "Guest";
+            const displaySub = s.email ?? "—";
+            const busy = checkingIn === s.id || uncheckingIn === s.id;
 
-        return (
-          <div
-            key={s.id}
-            style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              padding: "16px 0",
-              borderBottom: isLast ? "none" : "1px solid var(--lt-border)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            let badge: React.ReactNode = null;
+            if (showAction) {
+              badge = attended ? (
+                <button
+                  onClick={() => onUncheckIn(s.id)}
+                  disabled={busy}
+                  title="Click to undo check-in"
+                  style={{
+                    padding: "4px 14px", borderRadius: "var(--lt-radius-full)",
+                    fontSize: 13, fontWeight: 600, border: "none", cursor: busy ? "wait" : "pointer",
+                    backgroundColor: "var(--lt-teal)", color: "white",
+                    opacity: busy ? 0.6 : 1, transition: "var(--lt-transition)",
+                  }}
+                >
+                  {uncheckingIn === s.id ? "…" : "✓ Checked In"}
+                </button>
+              ) : (
+                <button
+                  onClick={() => onCheckIn(s.id)}
+                  disabled={busy}
+                  title="Click to check in"
+                  style={{
+                    padding: "4px 14px", borderRadius: "var(--lt-radius-full)",
+                    fontSize: 13, fontWeight: 600, border: "none", cursor: busy ? "wait" : "pointer",
+                    backgroundColor: "var(--lt-error-bg)", color: "var(--lt-error)",
+                    opacity: busy ? 0.6 : 1, transition: "var(--lt-transition)",
+                  }}
+                >
+                  {checkingIn === s.id ? "…" : "Check In"}
+                </button>
+              );
+            } else if (postEvent) {
+              badge = attended ? (
+                <span style={{ padding: "4px 14px", borderRadius: "var(--lt-radius-full)", fontSize: 13, fontWeight: 600, backgroundColor: "var(--lt-teal)", color: "white" }}>
+                  ✓ Attended
+                </span>
+              ) : (
+                <span style={{ padding: "4px 14px", borderRadius: "var(--lt-radius-full)", fontSize: 13, fontWeight: 600, backgroundColor: "var(--lt-error-bg)", color: "var(--lt-error)" }}>
+                  Absent
+                </span>
+              );
+            }
+
+            return (
               <div
-                className="lt-avatar lt-avatar--sm"
-                style={{ background: "none", border: "2px solid var(--lt-border)", color: "var(--lt-text-muted)" }}
+                key={s.id}
+                style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "16px 0",
+                  borderBottom: isLast ? "none" : "1px solid var(--lt-border)",
+                }}
               >
-                {initials}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div
+                    className="lt-avatar lt-avatar--sm"
+                    style={{ background: "none", border: "2px solid var(--lt-border)", color: "var(--lt-text-muted)" }}
+                  >
+                    {initials}
+                  </div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--lt-text-primary)" }}>{displayName}</p>
+                    <p style={{ margin: 0, fontSize: 12, color: "var(--lt-text-secondary)" }}>{displaySub}</p>
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {badge}
+                </div>
               </div>
-              <div>
-                <p style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "var(--lt-text-primary)" }}>{displayName}</p>
-                <p style={{ margin: 0, fontSize: 12, color: "var(--lt-text-secondary)" }}>{displaySub}</p>
-              </div>
-            </div>
-            {badge}
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -493,7 +642,7 @@ function ClustersPanel({ compact = false }: { compact?: boolean }) {
   return (
     <div style={{ flex: "1 1 40%", minWidth: 240 }}>
       <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--lt-text-primary)" }}>Team Clusters</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, backgroundColor: "var(--lt-card-bg-muted)", padding: 24, borderRadius: "var(--lt-radius-md)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, backgroundColor: "var(--lt-card-bg-muted)", padding: 24, borderRadius: "var(--lt-radius-md)", maxHeight: 420, overflowY: "auto" }}>
         {clusters.map((group, i) => (
           <div
             key={group}
@@ -515,31 +664,329 @@ function ClustersPanel({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function ShowcasePanel() {
-  const actions = [
-    { label: "Upload Photos", bg: "var(--lt-teal-light)", color: "var(--lt-teal)", border: "1px solid var(--lt-border-focus)" },
-    { label: "Post on Social Media", bg: "var(--lt-purple-light)", color: "var(--lt-purple)", border: "none" },
-    { label: "Reflect on your experience", bg: "var(--lt-card-bg-white)", color: "var(--lt-text-primary)", border: "1px solid var(--lt-border)" },
+function MessageModal({ onSend, onClose }: {
+  onSend: (content: string, type: "announcement" | "reminder" | "appreciation") => Promise<void>;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [type, setType] = useState<"announcement" | "reminder" | "appreciation">("announcement");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const types: { value: "announcement" | "reminder" | "appreciation"; label: string; emoji: string }[] = [
+    { value: "announcement", label: "Announcement", emoji: "📢" },
+    { value: "reminder",     label: "Reminder",     emoji: "⏰" },
+    { value: "appreciation", label: "Appreciation", emoji: "🙏" },
   ];
+
+  async function submit() {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    await onSend(text.trim(), type);
+    setSent(true);
+    setSending(false);
+    setTimeout(() => { setSent(false); onClose(); }, 1500);
+  }
+
   return (
-    <div>
-      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: "var(--lt-text-primary)" }}>Showcase your Service:</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, backgroundColor: "var(--lt-card-bg-muted)", padding: 20, borderRadius: "var(--lt-radius-md)" }}>
-        {actions.map(a => (
-          <div
-            key={a.label}
-            style={{
-              backgroundColor: a.bg, color: a.color, border: a.border,
-              padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              fontSize: 15, cursor: "pointer", transition: "var(--lt-transition)",
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>{a.label}</span>
-            <span className="lt-badge lt-badge--active">+5</span>
+    /* Backdrop */
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 50,
+        backgroundColor: "rgba(0,0,0,0.35)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: 24,
+      }}
+    >
+      {/* Modal card */}
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "var(--lt-card-bg-white)",
+          borderRadius: "var(--lt-radius-md)",
+          boxShadow: "var(--lt-shadow-elevated)",
+          width: "100%", maxWidth: 480,
+          padding: 32,
+          display: "flex", flexDirection: "column", gap: 20,
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: "var(--lt-text-primary)" }}>
+            Message Volunteers
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--lt-text-muted)", lineHeight: 1 }}>✕</button>
+        </div>
+
+        {/* Type selector */}
+        <div>
+          <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--lt-text-secondary)" }}>MESSAGE TYPE</p>
+          <div style={{ display: "flex", gap: 8 }}>
+            {types.map(t => (
+              <button
+                key={t.value}
+                onClick={() => setType(t.value)}
+                style={{
+                  flex: 1, padding: "8px 12px", borderRadius: "var(--lt-radius-full)",
+                  border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  transition: "var(--lt-transition)",
+                  backgroundColor: type === t.value ? "var(--lt-text-primary)" : "var(--lt-card-bg-muted)",
+                  color: type === t.value ? "white" : "var(--lt-text-secondary)",
+                }}
+              >
+                {t.emoji} {t.label}
+              </button>
+            ))}
           </div>
-        ))}
+        </div>
+
+        {/* Message input */}
+        <div>
+          <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--lt-text-secondary)" }}>MESSAGE</p>
+          <textarea
+            style={{
+              width: "100%", minHeight: 120, padding: "12px 16px",
+              borderRadius: "var(--lt-radius-sm)", border: "1px solid var(--lt-border)",
+              fontSize: 15, color: "var(--lt-text-primary)", background: "var(--lt-card-bg-muted)",
+              resize: "vertical", outline: "none", fontFamily: "inherit", boxSizing: "border-box",
+            }}
+            placeholder={`Write your ${type} here...`}
+            value={text}
+            onChange={e => setText(e.target.value)}
+            disabled={sending || sent}
+            autoFocus
+          />
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            className="lt-btn"
+            style={{ borderRadius: "var(--lt-radius-full)", padding: "10px 24px", backgroundColor: "var(--lt-card-bg-muted)", color: "var(--lt-text-secondary)" }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={sending || !text.trim() || sent}
+            className="lt-btn lt-btn--primary"
+            style={{ borderRadius: "var(--lt-radius-full)", padding: "10px 24px" }}
+          >
+            {sent ? "✓ Sent!" : sending ? "Sending…" : "Send Message"}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
+
+const TYPE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  announcement: { bg: "var(--lt-teal-light)",   color: "var(--lt-teal)",   label: "📢 Announcement" },
+  reminder:     { bg: "var(--lt-yellow-light)",  color: "var(--lt-yellow)", label: "⏰ Reminder"     },
+  appreciation: { bg: "var(--lt-purple-light)",  color: "var(--lt-purple)", label: "🙏 Appreciation" },
+};
+
+function MessageHistoryPanel({ messages }: { messages: { id: string; content: string; message_type: string; sent_at: string }[] }) {
+  if (messages.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 10, color: "var(--lt-text-primary)" }}>
+        Sent Messages
+      </h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 320, overflowY: "auto" }}>
+        {[...messages].reverse().map(m => {
+          const s = TYPE_STYLES[m.message_type] ?? TYPE_STYLES.announcement;
+          return (
+            <div key={m.id} style={{
+              backgroundColor: s.bg, borderRadius: "var(--lt-radius-sm)",
+              padding: "10px 14px",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: s.color }}>{s.label}</span>
+                <span style={{ fontSize: 11, color: "var(--lt-text-muted)" }}>
+                  {new Date(m.sent_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: 13, color: "var(--lt-text-primary)", lineHeight: 1.5 }}>{m.content}</p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ShowcasePanel({ onUploadPhoto, uploading, success, photos }: {
+  onUploadPhoto: (file: File) => Promise<void>;
+  uploading: boolean;
+  success: boolean;
+  photos: { id: string; photo_url: string; caption: string | null; uploaded_at: string }[];
+}) {
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  function triggerUpload() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/gif,image/webp";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) onUploadPhoto(file);
+    };
+    input.click();
+  }
+
+  function openLightbox(i: number) { setLightboxIndex(i); }
+  function closeLightbox() { setLightboxIndex(null); }
+  function prev() { setLightboxIndex(i => i !== null ? (i - 1 + photos.length) % photos.length : null); }
+  function next() { setLightboxIndex(i => i !== null ? (i + 1) % photos.length : null); }
+
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+      else if (e.key === "Escape") closeLightbox();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lightboxIndex, photos.length]);
+
+  return (
+    <div>
+      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: "var(--lt-text-primary)" }}>Showcase your Service:</h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, backgroundColor: "var(--lt-card-bg-muted)", padding: 20, borderRadius: "var(--lt-radius-md)" }}>
+        {/* Upload Photos — wired */}
+        <div
+          onClick={uploading ? undefined : triggerUpload}
+          style={{
+            backgroundColor: "var(--lt-teal-light)", color: "var(--lt-teal)",
+            border: "1px solid var(--lt-border-focus)",
+            padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            fontSize: 15, cursor: uploading ? "wait" : "pointer", transition: "var(--lt-transition)",
+            opacity: uploading ? 0.7 : 1,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>
+            {success ? "✓ Photo uploaded!" : uploading ? "Uploading…" : "Upload Photos"}
+          </span>
+          <span className="lt-badge lt-badge--active">+5</span>
+        </div>
+
+        {/* Post on Social Media — placeholder */}
+        <div style={{
+          backgroundColor: "var(--lt-purple-light)", color: "var(--lt-purple)",
+          padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          fontSize: 15, cursor: "pointer", transition: "var(--lt-transition)",
+        }}>
+          <span style={{ fontWeight: 600 }}>Post on Social Media</span>
+          <span className="lt-badge lt-badge--active">+5</span>
+        </div>
+
+        {/* Reflect — placeholder */}
+        <div style={{
+          backgroundColor: "var(--lt-card-bg-white)", color: "var(--lt-text-primary)",
+          border: "1px solid var(--lt-border)",
+          padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          fontSize: 15, cursor: "pointer", transition: "var(--lt-transition)",
+        }}>
+          <span style={{ fontWeight: 600 }}>Reflect on your experience</span>
+          <span className="lt-badge lt-badge--active">+5</span>
+        </div>
+      </div>
+
+      {/* Photo grid */}
+      {photos.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--lt-text-secondary)" }}>
+            UPLOADED PHOTOS ({photos.length})
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {photos.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() => openLightbox(i)}
+                style={{ display: "block", aspectRatio: "1", borderRadius: "var(--lt-radius-sm)", overflow: "hidden", border: "none", padding: 0, cursor: "pointer" }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.photo_url}
+                  alt={p.caption ?? "Event photo"}
+                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "transform 0.2s" }}
+                  onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.05)")}
+                  onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+                />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightboxIndex !== null && (
+        <div
+          onClick={closeLightbox}
+          style={{
+            position: "fixed", inset: 0, zIndex: 100,
+            backgroundColor: "rgba(0,0,0,0.9)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {/* Close */}
+          <button
+            onClick={closeLightbox}
+            style={{ position: "absolute", top: 20, right: 24, background: "none", border: "none", color: "white", fontSize: 32, cursor: "pointer", lineHeight: 1, zIndex: 101 }}
+          >
+            ✕
+          </button>
+
+          {/* Counter */}
+          <span style={{ position: "absolute", top: 24, left: "50%", transform: "translateX(-50%)", color: "rgba(255,255,255,0.6)", fontSize: 13, fontWeight: 600 }}>
+            {lightboxIndex + 1} / {photos.length}
+          </span>
+
+          {/* Prev */}
+          {photos.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); prev(); }}
+              style={{ position: "absolute", left: 16, background: "rgba(255,255,255,0.12)", border: "none", color: "white", fontSize: 28, cursor: "pointer", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 101 }}
+            >
+              ‹
+            </button>
+          )}
+
+          {/* Image */}
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "85vh", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photos[lightboxIndex].photo_url}
+              alt={photos[lightboxIndex].caption ?? "Event photo"}
+              style={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8, boxShadow: "0 8px 40px rgba(0,0,0,0.6)" }}
+            />
+            {photos[lightboxIndex].caption && (
+              <p style={{ margin: 0, color: "rgba(255,255,255,0.8)", fontSize: 14, textAlign: "center" }}>
+                {photos[lightboxIndex].caption}
+              </p>
+            )}
+          </div>
+
+          {/* Next */}
+          {photos.length > 1 && (
+            <button
+              onClick={e => { e.stopPropagation(); next(); }}
+              style={{ position: "absolute", right: 16, background: "rgba(255,255,255,0.12)", border: "none", color: "white", fontSize: 28, cursor: "pointer", borderRadius: "50%", width: 48, height: 48, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 101 }}
+            >
+              ›
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

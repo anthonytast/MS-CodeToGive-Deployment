@@ -223,8 +223,7 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
     if not event_result.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    event = event_result.data[0]
-    if event["event_leader_id"] != current_user["sub"]:
+    if event_result.data[0]["event_leader_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Only the event leader can check in volunteers")
 
     signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
@@ -251,5 +250,31 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
             event_id=event_id,
             description=f"Attended event ({points // 10}hr)",
         )
+
+    return updated.data[0]
+
+
+@router.patch("/{event_id}/signups/{signup_id}/uncheck-in", response_model=SignupResponse)
+async def uncheck_in_volunteer(event_id: str, signup_id: str, current_user: CurrentUser):
+    """Undo a check-in — revert volunteer status to registered. Only the event leader can do this."""
+    db = get_supabase_admin()
+
+    event_result = db.table("events").select("id, event_leader_id").eq("id", event_id).execute()
+    if not event_result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event_result.data[0]["event_leader_id"] != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Only the event leader can undo check-ins")
+
+    signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
+    if not signup_result.data:
+        raise HTTPException(status_code=404, detail="Signup not found")
+
+    if signup_result.data[0]["status"] != "attended":
+        raise HTTPException(status_code=422, detail="Volunteer is not currently checked in")
+
+    updated = db.table("event_signups").update({"status": "registered", "checked_in_at": None}).eq("id", signup_id).execute()
+    if not updated.data:
+        raise HTTPException(status_code=500, detail="Failed to undo check-in")
 
     return updated.data[0]
