@@ -223,7 +223,8 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
     if not event_result.data:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if event_result.data[0]["event_leader_id"] != current_user["sub"]:
+    event = event_result.data[0]
+    if event["event_leader_id"] != current_user["sub"]:
         raise HTTPException(status_code=403, detail="Only the event leader can check in volunteers")
 
     signup_result = db.table("event_signups").select("*").eq("id", signup_id).eq("event_id", event_id).execute()
