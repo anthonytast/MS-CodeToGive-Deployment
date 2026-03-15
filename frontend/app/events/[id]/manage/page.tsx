@@ -68,6 +68,42 @@ export default function ManageEventPage() {
   const [userName, setUserName] = useState("User");
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoSuccess, setPhotoSuccess] = useState(false);
+
+  // ── Send Message ───────────────────────────────────────────────────────
+
+  async function handleSendMessage(content: string, messageType: "announcement" | "reminder" | "appreciation") {
+    if (!token || !content.trim()) return;
+    await fetch(`${API_URL}/api/v1/events/${eventId}/messages`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ content, message_type: messageType }),
+    });
+  }
+
+  // ── Upload Photo ───────────────────────────────────────────────────────
+
+  async function handleUploadPhoto(file: File) {
+    if (!token || uploadingPhoto) return;
+    setUploadingPhoto(true);
+    setPhotoSuccess(false);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`${API_URL}/api/v1/events/${eventId}/photos`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: form,
+      });
+      if (res.ok) {
+        setPhotoSuccess(true);
+        setTimeout(() => setPhotoSuccess(false), 3000);
+      }
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -295,16 +331,7 @@ export default function ManageEventPage() {
                       Edit Event ✎
                     </Link>
 
-                    {/* Send Message placeholder */}
-                    <div style={{
-                      flex: 1, minWidth: 200,
-                      backgroundColor: "var(--lt-card-bg-muted)", padding: "12px 20px",
-                      borderRadius: "var(--lt-radius-full)", color: "var(--lt-text-muted)",
-                      fontSize: 15, display: "flex", alignItems: "center",
-                      cursor: "not-allowed",
-                    }}>
-                      Send Message...
-                    </div>
+                    <SendMessageBox onSend={handleSendMessage} />
                   </div>
 
                   <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
@@ -341,14 +368,7 @@ export default function ManageEventPage() {
                   </div>
 
                   <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
-                    {/* Send Message placeholder */}
-                    <div style={{
-                      backgroundColor: "var(--lt-card-bg-muted)", padding: "14px 20px",
-                      borderRadius: "var(--lt-radius-full)", color: "var(--lt-text-muted)",
-                      fontSize: 15, cursor: "not-allowed",
-                    }}>
-                      Send Message...
-                    </div>
+                    <SendMessageBox onSend={handleSendMessage} />
                     <ClustersPanel />
                   </div>
                 </div>
@@ -369,19 +389,12 @@ export default function ManageEventPage() {
                   </div>
 
                   <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
-                    {/* Send Message placeholder */}
-                    <div style={{
-                      backgroundColor: "var(--lt-card-bg-muted)", padding: "14px 20px",
-                      borderRadius: "var(--lt-radius-full)", color: "var(--lt-text-muted)",
-                      fontSize: 15, cursor: "not-allowed",
-                    }}>
-                      Send Message...
-                    </div>
+                    <SendMessageBox onSend={handleSendMessage} />
 
                     <ClustersPanel compact />
 
                     {/* Showcase Your Service */}
-                    <ShowcasePanel />
+                    <ShowcasePanel onUploadPhoto={handleUploadPhoto} uploading={uploadingPhoto} success={photoSuccess} />
                   </div>
                 </div>
               )}
@@ -515,31 +528,108 @@ function ClustersPanel({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function ShowcasePanel() {
-  const actions = [
-    { label: "Upload Photos", bg: "var(--lt-teal-light)", color: "var(--lt-teal)", border: "1px solid var(--lt-border-focus)" },
-    { label: "Post on Social Media", bg: "var(--lt-purple-light)", color: "var(--lt-purple)", border: "none" },
-    { label: "Reflect on your experience", bg: "var(--lt-card-bg-white)", color: "var(--lt-text-primary)", border: "1px solid var(--lt-border)" },
-  ];
+function SendMessageBox({ onSend }: { onSend: (content: string, type: "announcement" | "reminder" | "appreciation") => Promise<void> }) {
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function submit() {
+    if (!text.trim() || sending) return;
+    setSending(true);
+    await onSend(text.trim(), "announcement");
+    setText("");
+    setSent(true);
+    setSending(false);
+    setTimeout(() => setSent(false), 2500);
+  }
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      <input
+        className="lt-input"
+        style={{ flex: 1, borderRadius: "var(--lt-radius-full)", padding: "12px 18px", fontSize: 15 }}
+        placeholder="Send message to volunteers..."
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === "Enter") submit(); }}
+        disabled={sending}
+      />
+      <button
+        onClick={submit}
+        disabled={sending || !text.trim()}
+        className="lt-btn lt-btn--primary"
+        style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 18px", whiteSpace: "nowrap" }}
+      >
+        {sent ? "✓ Sent" : sending ? "…" : "Send"}
+      </button>
+    </div>
+  );
+}
+
+function ShowcasePanel({ onUploadPhoto, uploading, success }: {
+  onUploadPhoto: (file: File) => Promise<void>;
+  uploading: boolean;
+  success: boolean;
+}) {
+  const fileInputRef = useState<HTMLInputElement | null>(null);
+
+  function triggerUpload() {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/jpeg,image/png,image/gif,image/webp";
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) onUploadPhoto(file);
+    };
+    input.click();
+  }
+
   return (
     <div>
       <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: "var(--lt-text-primary)" }}>Showcase your Service:</h3>
       <div style={{ display: "flex", flexDirection: "column", gap: 10, backgroundColor: "var(--lt-card-bg-muted)", padding: 20, borderRadius: "var(--lt-radius-md)" }}>
-        {actions.map(a => (
-          <div
-            key={a.label}
-            style={{
-              backgroundColor: a.bg, color: a.color, border: a.border,
-              padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              fontSize: 15, cursor: "pointer", transition: "var(--lt-transition)",
-            }}
-          >
-            <span style={{ fontWeight: 600 }}>{a.label}</span>
-            <span className="lt-badge lt-badge--active">+5</span>
-          </div>
-        ))}
+        {/* Upload Photos — wired */}
+        <div
+          onClick={uploading ? undefined : triggerUpload}
+          style={{
+            backgroundColor: "var(--lt-teal-light)", color: "var(--lt-teal)",
+            border: "1px solid var(--lt-border-focus)",
+            padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            fontSize: 15, cursor: uploading ? "wait" : "pointer", transition: "var(--lt-transition)",
+            opacity: uploading ? 0.7 : 1,
+          }}
+        >
+          <span style={{ fontWeight: 600 }}>
+            {success ? "✓ Photo uploaded!" : uploading ? "Uploading…" : "Upload Photos"}
+          </span>
+          <span className="lt-badge lt-badge--active">+5</span>
+        </div>
+
+        {/* Post on Social Media — placeholder */}
+        <div style={{
+          backgroundColor: "var(--lt-purple-light)", color: "var(--lt-purple)",
+          padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          fontSize: 15, cursor: "pointer", transition: "var(--lt-transition)",
+        }}>
+          <span style={{ fontWeight: 600 }}>Post on Social Media</span>
+          <span className="lt-badge lt-badge--active">+5</span>
+        </div>
+
+        {/* Reflect — placeholder */}
+        <div style={{
+          backgroundColor: "var(--lt-card-bg-white)", color: "var(--lt-text-primary)",
+          border: "1px solid var(--lt-border)",
+          padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          fontSize: 15, cursor: "pointer", transition: "var(--lt-transition)",
+        }}>
+          <span style={{ fontWeight: 600 }}>Reflect on your experience</span>
+          <span className="lt-badge lt-badge--active">+5</span>
+        </div>
       </div>
     </div>
   );
+  void fileInputRef; // suppress unused warning
 }
