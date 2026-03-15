@@ -115,7 +115,10 @@ useEffect(() => {
 }, []);
 
 return (
-  <div className="lt-page" style={{ flexDirection: "row", alignItems: "stretch" }}>
+  <div
+  className={`lt-page ${styles.pageFont}`}
+  style={{ flexDirection: "row", alignItems: "stretch" }}
+>
     <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
     <div style={{ flex: 1, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
@@ -383,7 +386,7 @@ return (
           {/* Hero Section */}
           <section className="relative z-10 pointer-events-none max-w-5xl mx-auto flex flex-col items-center text-center py-32 px-6">
             <h1 className="text-3xl md:text-4xl font-bold mb-4 text-black">
-              Welcome to Lemontree&apos;s Volunteer Hub
+              Welcome to Lemontree's Volunteer Hub
             </h1>
 
             <p className="text-black mb-6 max-w-xl">
@@ -391,7 +394,7 @@ return (
             </p>
 
             <Link href="/events" className="pointer-events-auto">
-              <button className="bg-[#6942b5] text-white px-6 py-3 rounded-full hover:bg-[#5a34a0] transition">
+              <button className="bg-[#2E8B7A] text-white px-6 py-3 rounded-full hover:bg-[#247060] transition">
                 Start Volunteering
               </button>
             </Link>
