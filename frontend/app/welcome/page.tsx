@@ -21,42 +21,55 @@ export default function WelcomePage() {
  const [searchOpen, setSearchOpen] = useState(false);
  const [searchQuery, setSearchQuery] = useState("");
  const [eventsOpen, setEventsOpen] = useState(false);
- const [markers, setMarkers] = useState<any[]>([]);
+ const [markers, setMarkers] = useState<{ id: string; lng: number; lat: number; type: string }[]>([]);
+ const [viewState, setViewState] = useState({ longitude: -73.94, latitude: 40.82, zoom: 11 });
+ const [selectedResource, setSelectedResource] = useState<any>(null);
+ const [loadingResource, setLoadingResource] = useState(false);
+
+ async function handleMarkerClick(id: string) {
+   setSelectedResource(null);
+   setLoadingResource(true);
+   try {
+     const res = await fetch(`https://platform.foodhelpline.org/api/resources/${id}`);
+     const raw = await res.json();
+     // response may be superjson-wrapped
+     const resource = raw.json ?? raw;
+     setSelectedResource(resource);
+   } catch (err) {
+     console.error("Failed to load resource:", err);
+   } finally {
+     setLoadingResource(false);
+   }
+ }
+
+ async function loadMarkers(bounds: { minLng: number; minLat: number; maxLng: number; maxLat: number }) {
+   try {
+     const url = `https://platform.foodhelpline.org/api/resources/markersWithinBounds`
+       + `?corner=${bounds.minLng},${bounds.minLat}&corner=${bounds.maxLng},${bounds.maxLat}`;
+     const res = await fetch(url);
+     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+     const raw = await res.json();
+
+     // markersWithinBounds returns a GeoJSON FeatureCollection (may be superjson-wrapped)
+     const featureCollection = raw.features ? raw : raw.json;
+     const features: any[] = featureCollection?.features ?? [];
+
+     setMarkers(features
+       .filter((f: any) => f.geometry?.coordinates?.length >= 2)
+       .map((f: any) => ({
+         id: f.properties.id,
+         type: f.properties.resourceTypeId,
+         lng: f.geometry.coordinates[0],
+         lat: f.geometry.coordinates[1],
+       }))
+     );
+   } catch (err) {
+     console.error("Error loading markers:", err);
+   }
+ }
 
 useEffect(() => {
-  async function loadMarkers() {
-    try {
-      const res = await fetch(
-        "https://platform.foodhelpline.org/api/resources/markersWithinBounds?corner=-74.1,40.7&corner=-73.8,40.9"
-      );
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const raw = await res.json();
-      console.log("RAW RESPONSE:", raw);
-
-      const markerArray =
-        raw.markers ??
-        raw.data ??
-        raw.items ??
-        raw.results ??
-        raw.json?.markers ??
-        raw.json?.data ??
-        raw.json?.items ??
-        raw.json?.results ??
-        [];
-
-      console.log("MARKER ARRAY:", markerArray);
-      console.log("FIRST ITEM:", markerArray[0]);
-
-      setMarkers(Array.isArray(markerArray) ? markerArray : []);
-    } catch (err) {
-      console.error("Error loading markers:", err);
-      setMarkers([]);
-    }
-  }
-
-  loadMarkers();
+  loadMarkers({ minLng: -74.1, minLat: 40.7, maxLng: -73.8, maxLat: 40.9 });
 }, []);
 
  return (
@@ -270,56 +283,111 @@ useEffect(() => {
     <div className="absolute inset-0 h-[500px] opacity-30">
     <Map
   mapLib={maplibregl}
-  initialViewState={{
-    longitude: -73.94,
-    latitude: 40.82,
-    zoom: 11
+  {...viewState}
+  onMove={(e) => setViewState(e.viewState)}
+  onMoveEnd={(e) => {
+    const b = e.target.getBounds();
+    loadMarkers({ minLng: b.getWest(), minLat: b.getSouth(), maxLng: b.getEast(), maxLat: b.getNorth() });
   }}
   style={{ width: "100%", height: "100%" }}
   mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
 >
-
-  {/* RED TEST MARKER */}
-  <Marker longitude={-73.94} latitude={40.82} anchor="bottom">
-    <div className="w-5 h-5 bg-red-500 rounded-full" />
-  </Marker>
-
-  {/* ONLY ONE markers.map block */}
-  {markers.map((marker, index) => {
-    const lng =
-      marker.longitude ??
-      marker.lng ??
-      marker.lon ??
-      marker.location?.lng ??
-      marker.location?.longitude;
-
-    const lat =
-      marker.latitude ??
-      marker.lat ??
-      marker.location?.lat ??
-      marker.location?.latitude;
-
-    if (lng == null || lat == null) return null;
-
-    return (
-      <Marker
-        key={marker.id ?? index}
-        longitude={lng}
-        latitude={lat}
-        anchor="bottom"
-      >
-        <div className="relative flex flex-col items-center">
-          <div className="w-6 h-6 bg-[#6942b5] rounded-full border-2 border-white shadow-md" />
-          <div className="w-0 h-0 border-l-[6px] border-r-[6px] border-t-[10px] border-l-transparent border-r-transparent border-t-[#6942b5] -mt-1" />
-        </div>
-      </Marker>
-    );
-  })}
-
+  {markers.map((m) => (
+    <Marker key={m.id} longitude={m.lng} latitude={m.lat} anchor="center">
+      <div
+        onClick={() => handleMarkerClick(m.id)}
+        title={m.type === "SOUP_KITCHEN" ? "Soup Kitchen" : "Food Pantry"}
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: "50%",
+          border: "2px solid white",
+          background: m.type === "SOUP_KITCHEN" ? "#E86F51" : "#6942b5",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+          cursor: "pointer",
+          transition: "transform 0.15s",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.6)")}
+        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+      />
+    </Marker>
+  ))}
 </Map>
 </div>
-{/* Hero Section */}
-    <section className="relative z-10 max-w-5xl mx-auto flex flex-col items-center text-center py-32 px-6">
+
+  {/* Resource detail panel — outside opacity-30 div so it renders at full opacity */}
+  {(loadingResource || selectedResource) && (
+    <div style={{
+      position: "absolute", top: 16, right: 16, zIndex: 30,
+      width: 280, background: "white", borderRadius: 12,
+      boxShadow: "0 4px 24px rgba(0,0,0,0.18)", padding: 20,
+    }}>
+      <button
+        onClick={() => setSelectedResource(null)}
+        style={{ position: "absolute", top: 10, right: 12, background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#666" }}
+      >✕</button>
+
+      {loadingResource ? (
+        <div style={{ display: "flex", justifyContent: "center", padding: 24 }}>
+          <div className="lt-spinner" style={{ width: 32, height: 32, borderTopColor: "#6942b5" }} />
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5,
+              padding: "2px 8px", borderRadius: 99,
+              background: selectedResource.resourceType?.id === "SOUP_KITCHEN" ? "#fde8e2" : "#ede5f7",
+              color: selectedResource.resourceType?.id === "SOUP_KITCHEN" ? "#E86F51" : "#6942b5",
+            }}>
+              {selectedResource.resourceType?.name ?? "Resource"}
+            </span>
+          </div>
+
+          <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6, color: "#1a1a1a" }}>
+            {selectedResource.name ?? "Unnamed Resource"}
+          </h3>
+
+          {(selectedResource.addressStreet1 || selectedResource.city) && (
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
+              📍 {[selectedResource.addressStreet1, selectedResource.city, selectedResource.state].filter(Boolean).join(", ")}
+            </p>
+          )}
+
+          {selectedResource.contacts?.[0]?.phone && (
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 8 }}>
+              📞 {selectedResource.contacts[0].phone}
+            </p>
+          )}
+
+          {selectedResource.occurrences?.length > 0 && (
+            <div style={{ marginTop: 8 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: "#999", marginBottom: 4 }}>NEXT OPEN</p>
+              {selectedResource.occurrences.slice(0, 2).map((o: any) => (
+                <p key={o.id} style={{ fontSize: 13, color: "#444" }}>
+                  {new Date(o.startTime).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  {" · "}
+                  {new Date(o.startTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  {" – "}
+                  {new Date(o.endTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {selectedResource.website && (
+            <a href={selectedResource.website} target="_blank" rel="noreferrer"
+              style={{ display: "inline-block", marginTop: 12, fontSize: 13, color: "#6942b5", fontWeight: 600 }}>
+              Visit website →
+            </a>
+          )}
+        </>
+      )}
+    </div>
+  )}
+
+{/* Hero Section — pointer-events-none so clicks pass through to the map */}
+    <section className="relative z-10 pointer-events-none max-w-5xl mx-auto flex flex-col items-center text-center py-32 px-6">
          <h1 className="text-3xl md:text-4xl font-bold mb-4 text-[#6942b5]">
            Welcome to Lemontree's Volunteer Hub
          </h1>
@@ -328,7 +396,7 @@ useEffect(() => {
            Help connect communities to nearby food resources
          </p>
 
-         <button className="bg-[#6942b5] text-white px-6 py-3 rounded-full hover:bg-[#5a34a0] transition">
+         <button className="pointer-events-auto bg-[#6942b5] text-white px-6 py-3 rounded-full hover:bg-[#5a34a0] transition">
            Start Volunteering
          </button>
        </section>
