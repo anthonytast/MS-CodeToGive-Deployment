@@ -60,6 +60,8 @@ export default function SignUpPage() {
   const [location, setLocation] = useState("");
   const [languages, setLanguages] = useState<string[]>([]);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [otherLangInput, setOtherLangInput] = useState("");
+  const [showOtherLangInput, setShowOtherLangInput] = useState(false);
 
   // How did you find us
   const [referral, setReferral] = useState("");
@@ -101,9 +103,28 @@ export default function SignUpPage() {
   }
 
   function toggleLanguage(lang: string) {
+    if (lang === "Other") {
+      if (showOtherLangInput) {
+        // Uncheck Other — hide input and remove any custom language tagged as "Other"
+        setShowOtherLangInput(false);
+        setOtherLangInput("");
+      } else {
+        setShowOtherLangInput(true);
+      }
+      return;
+    }
     setLanguages((prev) =>
       prev.includes(lang) ? prev.filter((l) => l !== lang) : [...prev, lang]
     );
+  }
+
+  function confirmOtherLanguage() {
+    const trimmed = otherLangInput.trim();
+    if (trimmed) {
+      setLanguages((prev) => [...prev, trimmed]);
+    }
+    setOtherLangInput("");
+    setShowOtherLangInput(false);
   }
 
   function validate(): boolean {
@@ -345,12 +366,33 @@ export default function SignUpPage() {
                       <label key={lang} className={styles.languageOption}>
                         <input
                           type="checkbox"
-                          checked={languages.includes(lang)}
+                          checked={lang === "Other" ? showOtherLangInput : languages.includes(lang)}
                           onChange={() => toggleLanguage(lang)}
                         />
                         {lang}
                       </label>
                     ))}
+                    {showOtherLangInput && (
+                      <div className={styles.otherLangInputWrapper}>
+                        <input
+                          type="text"
+                          className="lt-input"
+                          placeholder="Type your language"
+                          value={otherLangInput}
+                          onChange={(e) => setOtherLangInput(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), confirmOtherLanguage())}
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          className="lt-btn lt-btn--primary"
+                          onClick={confirmOtherLanguage}
+                          style={{ marginTop: 6 }}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
