@@ -136,6 +136,56 @@
   overflow-x: auto;
 }
 
+/* ── Search Input ────────────────────────────────────────── */
+.searchInput {
+  padding: 9px 14px 9px 36px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--lt-text-primary);
+  background: var(--lt-card-bg-white);
+  border: 1px solid var(--lt-border);
+  border-radius: var(--lt-radius-sm);
+  outline: none;
+  transition: border-color var(--lt-transition), box-shadow var(--lt-transition);
+  width: 260px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 20 20' fill='%239C9690'%3E%3Cpath fill-rule='evenodd' d='M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 12px center;
+}
+
+.searchInput::placeholder {
+  color: var(--lt-text-muted);
+}
+
+.searchInput:focus {
+  border-color: var(--lt-teal);
+  box-shadow: 0 0 0 3px var(--lt-teal-light);
+}
+
+/* ── Status Filter ───────────────────────────────────────── */
+.statusFilter {
+  padding: 9px 32px 9px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--lt-text-primary);
+  background: var(--lt-card-bg-white);
+  border: 1px solid var(--lt-border);
+  border-radius: var(--lt-radius-sm);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--lt-transition), box-shadow var(--lt-transition);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B6560' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+}
+
+.statusFilter:focus {
+  border-color: var(--lt-teal);
+  box-shadow: 0 0 0 3px var(--lt-teal-light);
+}
+
 /* ── Role Select ─────────────────────────────────────────── */
 .roleSelect {
   padding: 6px 28px 6px 10px;
