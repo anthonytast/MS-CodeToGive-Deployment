@@ -1,5 +1,7 @@
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
+
 
 # Resolve .env relative to this file: backend/app/core/config.py → ../../.. → repo root
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
@@ -27,6 +29,22 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    
+    # CORS
+    cors_origins: str = "http://localhost:3000"
 
 
-settings = Settings()
+try:
+    settings = Settings()
+except Exception as e:
+    print(f"ERROR: Failed to load settings: {e}")
+    print(f"Missing or invalid environment variables")
+    # List which env vars are missing
+    required_vars = [
+        "SUPABASE_URL", "SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY",
+        "SUPABASE_JWT_SECRET", "SECRET_KEY"
+    ]
+    for var in required_vars:
+        print(f"  {var}: {'✓' if os.getenv(var) else '✗ MISSING'}")
+    raise
+
