@@ -4,8 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
+import { Map, Marker } from "react-map-gl/maplibre";
+import maplibregl from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
 import Sidebar from "@/app/components/ui/Sidebar";
 import styles from "@/app/dashboard/dashboard.module.css";
+
+const LEMONTREE_API = "https://platform.foodhelpline.org";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -16,10 +21,16 @@ interface EventData {
   volunteer_limit: number | null;
   current_signup_count: number;
   event_leader_id: string;
+  description: string;
   location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  resource_id: string | null;
   date: string;
   start_time: string;
   end_time: string;
+  shareable_link: string | null;
+  visibility: string;
 }
 
 interface Signup {
@@ -44,11 +55,6 @@ function getInitials(name: string | null | undefined): string {
   return parts[0].substring(0, 2).toUpperCase();
 }
 
-const CLUSTER_COLORS = [
-  "var(--lt-teal)",
-  "var(--lt-purple)",
-  "var(--lt-coral)",
-];
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -74,6 +80,21 @@ export default function ManageEventPage() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messages, setMessages] = useState<{ id: string; content: string; message_type: string; sent_at: string }[]>([]);
   const [photos, setPhotos] = useState<{ id: string; photo_url: string; caption: string | null; uploaded_at: string }[]>([]);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Map state
+  const [mapMarkers, setMapMarkers] = useState<{ id: string; lng: number; lat: number; type: string; name?: string }[]>([]);
+  const [resourceName, setResourceName] = useState<string | null>(null);
+  const [fullAddress, setFullAddress] = useState<string | null>(null);
+
+  function copyShareLink() {
+    if (!event?.shareable_link) return;
+    const url = `${window.location.origin}${event.shareable_link}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    });
+  }
 
   // ── Send Message ───────────────────────────────────────────────────────
 
@@ -174,6 +195,53 @@ export default function ManageEventPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Fetch map markers + resource name once event coords are known
+  useEffect(() => {
+    if (!event?.latitude || !event?.longitude) return;
+    const { latitude: lat, longitude: lng } = event;
+    const radius = 0.02;
+    const url = `${LEMONTREE_API}/api/resources/markersWithinBounds`
+      + `?corner=${lng - radius},${lat - radius}&corner=${lng + radius},${lat + radius}`;
+
+    fetch(url)
+      .then((r) => r.json())
+      .then((raw) => {
+        type GeoFeature = { geometry: { coordinates: number[] }; properties: { id: string; resourceTypeId: string; name?: string } };
+        const fc = raw.features ? raw : raw.json;
+        const features: GeoFeature[] = fc?.features ?? [];
+        setMapMarkers(
+          features
+            .filter((f) => f.geometry?.coordinates?.length >= 2)
+            .map((f) => ({
+              id: f.properties.id,
+              type: f.properties.resourceTypeId,
+              lng: f.geometry.coordinates[0],
+              lat: f.geometry.coordinates[1],
+              name: f.properties.name,
+            }))
+        );
+      })
+      .catch(() => {/* ignore */});
+
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      { headers: { "User-Agent": "lemontree-volunteer-app" } }
+    )
+      .then((r) => r.json())
+      .then((d) => { if (d.display_name) setFullAddress(d.display_name); })
+      .catch(() => {/* ignore */});
+
+    if (event.resource_id) {
+      fetch(`${LEMONTREE_API}/api/resources/${event.resource_id}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const name = data?.name ?? data?.locationName ?? null;
+          if (name) setResourceName(name);
+        })
+        .catch(() => {/* ignore */});
+    }
+  }, [event]);
+
   // ── Toggle Event Open / Closed ─────────────────────────────────────────
 
   async function handleToggleOpen() {
@@ -190,6 +258,28 @@ export default function ManageEventPage() {
       if (res.ok) {
         const updated: EventData = await res.json();
         setEvent(updated);
+        if (newStatus === "active") setActiveTab("during");
+      }
+    } finally {
+      setToggling(false);
+    }
+  }
+
+  // ── Mark Event Completed ───────────────────────────────────────────────
+
+  async function handleMarkCompleted() {
+    if (!event || !token || toggling) return;
+    setToggling(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/events/${eventId}`, {
+        method: "PUT",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      });
+      if (res.ok) {
+        const updated: EventData = await res.json();
+        setEvent(updated);
+        setActiveTab("post");
       }
     } finally {
       setToggling(false);
@@ -234,12 +324,18 @@ export default function ManageEventPage() {
     }
   }
 
+  // Force post-event tab when event is completed
+  useEffect(() => {
+    if (event?.status === "completed") setActiveTab("post");
+  }, [event?.status]);
+
   // ── Derived data ───────────────────────────────────────────────────────
 
   const activeSignups = signups.filter(s => s.status !== "cancelled");
   const checkedIn = activeSignups.filter(s => s.status === "attended").length;
   const total = activeSignups.length;
   const isOpen = event?.status === "active";
+  const isCompleted = event?.status === "completed";
   // ── Loading / Error states ─────────────────────────────────────────────
 
   if (!token) return null;
@@ -287,35 +383,60 @@ export default function ManageEventPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 32, flexWrap: "wrap", gap: 16 }}>
                 <div>
                   <h1 className="lt-section-title" style={{ fontSize: 32, margin: 0 }}>{event.title}</h1>
+                  {event.description && (
+                    <p style={{ color: "var(--lt-text-secondary)", fontSize: 14, marginTop: 8, lineHeight: 1.6, maxWidth: 560, margin: "8px 0 0" }}>{event.description}</p>
+                  )}
                   {activeTab !== "pre" && (
                     <p style={{ color: "var(--lt-text-secondary)", fontSize: 15, marginTop: 8, fontWeight: 500 }}>
                       Volunteers Status ({checkedIn}/{total})
                     </p>
                   )}
+                  {event.visibility === "private" && event.shareable_link && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10 }}>
+                      <span style={{ fontSize: 12, color: "var(--lt-text-muted)", fontWeight: 500 }}>
+                        🔒 Private · Share link:
+                      </span>
+                      <code style={{ fontSize: 11, background: "var(--lt-card-bg-muted)", padding: "2px 8px", borderRadius: "var(--lt-radius-sm)", color: "var(--lt-text-secondary)", maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {typeof window !== "undefined" ? `${window.location.origin}${event.shareable_link}` : event.shareable_link}
+                      </code>
+                      <button
+                        onClick={copyShareLink}
+                        style={{ fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: "var(--lt-radius-full)", border: "none", cursor: "pointer", background: linkCopied ? "var(--lt-teal)" : "var(--lt-purple)", color: "white", transition: "background 0.2s", whiteSpace: "nowrap" }}
+                      >
+                        {linkCopied ? "✓ Copied!" : "Copy Link"}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
-                {/* ── Tab switcher ─────────────────────────── */}
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {(["pre", "during", "post"] as Tab[]).map(tab => (
-                    <button
-                      key={tab}
-                      onClick={() => setActiveTab(tab)}
-                      style={{
-                        padding: "8px 20px",
-                        borderRadius: "var(--lt-radius-full)",
-                        fontSize: 14,
-                        fontWeight: 600,
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "var(--lt-transition)",
-                        backgroundColor: activeTab === tab ? "var(--lt-text-primary)" : "var(--lt-card-bg-muted)",
-                        color: activeTab === tab ? "white" : "var(--lt-text-secondary)",
-                      }}
-                    >
-                      {tab === "pre" ? "Pre-event" : tab === "during" ? "During event" : "Post-event"}
-                    </button>
-                  ))}
-                </div>
+                {/* ── Tab switcher (hidden when completed) ─── */}
+                {isCompleted ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: "var(--lt-radius-full)", background: "var(--lt-teal)", color: "white", fontSize: 13, fontWeight: 700 }}>
+                    ✓ Event Completed
+                  </span>
+                ) : (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {(["pre", "during", "post"] as Tab[]).map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
+                        style={{
+                          padding: "8px 20px",
+                          borderRadius: "var(--lt-radius-full)",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          border: "none",
+                          cursor: "pointer",
+                          transition: "var(--lt-transition)",
+                          backgroundColor: activeTab === tab ? "var(--lt-text-primary)" : "var(--lt-card-bg-muted)",
+                          color: activeTab === tab ? "white" : "var(--lt-text-secondary)",
+                        }}
+                      >
+                        {tab === "pre" ? "Pre-event" : tab === "during" ? "During event" : "Post-event"}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* ── PRE-EVENT ──────────────────────────────────── */}
@@ -380,8 +501,6 @@ export default function ManageEventPage() {
                       />
                     </div>
 
-                    {/* Right column: clusters */}
-                    <ClustersPanel />
                   </div>
 
                   <MessageHistoryPanel messages={messages} />
@@ -407,6 +526,14 @@ export default function ManageEventPage() {
                     >
                       📢 Message Volunteers
                     </button>
+                    <button
+                      onClick={handleMarkCompleted}
+                      disabled={toggling}
+                      className="lt-btn"
+                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-coral)", color: "white", fontWeight: 600, fontSize: 14, marginLeft: "auto", opacity: toggling ? 0.6 : 1 }}
+                    >
+                      {toggling ? "Saving…" : "Mark as Completed →"}
+                    </button>
                   </div>
 
                   <div className="animate-fade-in" style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
@@ -425,7 +552,6 @@ export default function ManageEventPage() {
                       />
                     </div>
 
-                    <ClustersPanel />
                   </div>
 
                   <MessageHistoryPanel messages={messages} />
@@ -435,23 +561,25 @@ export default function ManageEventPage() {
               {/* ── POST-EVENT ─────────────────────────────────── */}
               {activeTab === "post" && (
                 <>
-                  {/* Action bar */}
-                  <div style={{ display: "flex", gap: 12, marginBottom: 32, flexWrap: "wrap", alignItems: "center" }}>
-                    <Link
-                      href={`/events/${eventId}/edit`}
-                      className="lt-btn"
-                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-card-bg-muted)", color: "var(--lt-text-primary)" }}
-                    >
-                      Edit Event ✎
-                    </Link>
-                    <button
-                      onClick={() => setShowMessageModal(true)}
-                      className="lt-btn"
-                      style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-teal)", color: "white", fontWeight: 600, fontSize: 14 }}
-                    >
-                      📢 Message Volunteers
-                    </button>
-                  </div>
+                  {/* Action bar — hidden when event is completed */}
+                  {!isCompleted && (
+                    <div style={{ display: "flex", gap: 12, marginBottom: 32, flexWrap: "wrap", alignItems: "center" }}>
+                      <Link
+                        href={`/events/${eventId}/edit`}
+                        className="lt-btn"
+                        style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-card-bg-muted)", color: "var(--lt-text-primary)" }}
+                      >
+                        Edit Event ✎
+                      </Link>
+                      <button
+                        onClick={() => setShowMessageModal(true)}
+                        className="lt-btn"
+                        style={{ borderRadius: "var(--lt-radius-full)", padding: "12px 20px", backgroundColor: "var(--lt-teal)", color: "white", fontWeight: 600, fontSize: 14 }}
+                      >
+                        📢 Message Volunteers
+                      </button>
+                    </div>
+                  )}
 
                   <div className="animate-fade-in" style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
                     {/* Final attendance */}
@@ -470,14 +598,72 @@ export default function ManageEventPage() {
                       />
                     </div>
 
-                    <div style={{ flex: "1 1 40%", minWidth: 240, display: "flex", flexDirection: "column", gap: 24 }}>
-                      <ClustersPanel compact />
+                    <div style={{ flex: "1 1 40%", minWidth: 240 }}>
                       <ShowcasePanel onUploadPhoto={handleUploadPhoto} uploading={uploadingPhoto} success={photoSuccess} photos={photos} />
                     </div>
                   </div>
 
                   <MessageHistoryPanel messages={messages} />
                 </>
+              )}
+
+              {/* ── Location map ─────────────────────────────────── */}
+              {event.latitude && event.longitude && (
+                <div style={{ marginTop: 32, background: "var(--lt-card-bg-white)", border: "1px solid var(--lt-border)", borderRadius: "var(--lt-radius-lg)", padding: "24px 32px", boxShadow: "var(--lt-shadow-card)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 12 }}>
+                    <div>
+                      <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--lt-text-primary)", marginBottom: 4 }}>Location</h2>
+                      {resourceName && (
+                        <p style={{ fontSize: 15, fontWeight: 600, color: "var(--lt-teal)", margin: "0 0 4px" }}>{resourceName}</p>
+                      )}
+                      <p style={{ fontSize: 13, color: "var(--lt-text-secondary)", margin: 0, lineHeight: 1.5 }}>
+                        📍 {fullAddress ?? event.location_name}
+                      </p>
+                    </div>
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", fontSize: 13, fontWeight: 600, borderRadius: "var(--lt-radius-full)", background: "var(--lt-teal)", color: "white", textDecoration: "none", whiteSpace: "nowrap", flexShrink: 0 }}
+                    >
+                      Get Directions
+                    </a>
+                  </div>
+
+                  <div style={{ borderRadius: "var(--lt-radius-md)", overflow: "hidden", height: 360, border: "1px solid var(--lt-border)" }}>
+                    <Map
+                      mapLib={maplibregl}
+                      initialViewState={{ longitude: event.longitude, latitude: event.latitude, zoom: 15 }}
+                      style={{ width: "100%", height: "100%" }}
+                      mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+                      attributionControl={false}
+                    >
+                      {mapMarkers.map((m) => (
+                        <Marker key={m.id} longitude={m.lng} latitude={m.lat} anchor="center">
+                          <div
+                            title={m.name ?? (m.type === "SOUP_KITCHEN" ? "Soup Kitchen" : "Food Pantry")}
+                            style={{ width: 12, height: 12, borderRadius: "50%", border: "2px solid white", background: m.type === "SOUP_KITCHEN" ? "#E86F51" : "#6942b5", boxShadow: "0 1px 4px rgba(0,0,0,0.4)", cursor: "default" }}
+                          />
+                        </Marker>
+                      ))}
+                      <Marker longitude={event.longitude} latitude={event.latitude} anchor="center">
+                        <div style={{ width: 18, height: 18, borderRadius: "50%", border: "3px solid white", background: "#2E8B7A", boxShadow: "0 2px 8px rgba(0,0,0,0.5)" }} title="Event location" />
+                      </Marker>
+                    </Map>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 20, marginTop: 12, flexWrap: "wrap" }}>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--lt-text-secondary)" }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#2E8B7A", display: "inline-block", border: "2px solid white", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} /> Event location
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--lt-text-secondary)" }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#6942b5", display: "inline-block", border: "2px solid white", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} /> Food Pantry
+                    </span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--lt-text-secondary)" }}>
+                      <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#E86F51", display: "inline-block", border: "2px solid white", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} /> Soup Kitchen
+                    </span>
+                  </div>
+                </div>
               )}
             </>
           ) : null}
@@ -631,32 +817,6 @@ function VolunteerList({
   );
 }
 
-function ClustersPanel({ compact = false }: { compact?: boolean }) {
-  const clusters = compact ? ["A"] : ["A", "B", "C"];
-  return (
-    <div style={{ flex: "1 1 40%", minWidth: 240 }}>
-      <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, color: "var(--lt-text-primary)" }}>Team Clusters</h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, backgroundColor: "var(--lt-card-bg-muted)", padding: 24, borderRadius: "var(--lt-radius-md)", maxHeight: 420, overflowY: "auto" }}>
-        {clusters.map((group, i) => (
-          <div
-            key={group}
-            style={{
-              padding: "14px 18px", borderRadius: "var(--lt-radius-sm)",
-              backgroundColor: CLUSTER_COLORS[i % CLUSTER_COLORS.length],
-              color: "white",
-            }}
-          >
-            <p style={{ margin: "0 0 2px", fontSize: 15, fontWeight: 600 }}>Group {group}: Location</p>
-            <p style={{ margin: 0, fontSize: 13, opacity: 0.85 }}>Participant A, Participant B…</p>
-          </div>
-        ))}
-        <p style={{ margin: 0, fontSize: 12, color: "var(--lt-text-muted)", textAlign: "center" }}>
-          Team clustering coming soon
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function MessageModal({ onSend, onClose }: {
   onSend: (content: string, type: "announcement" | "reminder" | "appreciation") => Promise<void>;
