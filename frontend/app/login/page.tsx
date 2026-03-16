@@ -18,6 +18,8 @@ export default function LoginPage() {
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
   
+  useEffect(() => { document.title = "Login — Lemontree Volunteers"; }, []);
+
   useEffect(() => {
     const token = localStorage.getItem("access_token");
     if (token) {

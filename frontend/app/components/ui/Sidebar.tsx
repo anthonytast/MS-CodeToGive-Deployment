@@ -149,7 +149,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <button
           onClick={handleLogout}
           className="lt-sidebar__link"
-          style={{ marginTop: "auto", color: "var(--lt-coral)", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
+          style={{ color: "var(--lt-coral)", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left", marginTop: 8 }}
         >
           <svg className="lt-sidebar__icon" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 100-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H8a1 1 0 110-2h6.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />

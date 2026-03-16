@@ -367,13 +367,16 @@
 /* ── Sidebar ──────────────────────────────────────────────────── */
 .lt-sidebar {
   width: 240px;
-  min-height: 100vh;
+  height: 100vh;
+  position: sticky;
+  top: 0;
   background: var(--lt-bg);
   border-right: 1px solid var(--lt-border);
   padding: 24px 0;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .lt-sidebar__title {
@@ -391,6 +394,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .lt-sidebar__link {

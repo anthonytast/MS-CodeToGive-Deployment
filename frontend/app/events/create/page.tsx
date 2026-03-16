@@ -258,6 +258,8 @@ function getInitials(name: string) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function CreateEventPage() {
+  useEffect(() => { document.title = "Create Event — Lemontree Volunteers"; }, []);
+
   const router = useRouter();
   const searchParams = useSearchParams();
   const [form, setForm]               = useState<Form>(() => {

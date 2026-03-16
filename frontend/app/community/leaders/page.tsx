@@ -145,6 +145,8 @@ function Card({ accentColor, title, children, noPad }: {
 }
 
 export default function LeaderboardPage() {
+  useEffect(() => { document.title = "Community Leaders — Lemontree Volunteers"; }, []);
+
   const [period, setPeriod] = useState('All time');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userState, setUserState] = useState({ name: '', initials: '' });

@@ -8,6 +8,7 @@ import { Map, Marker } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Sidebar from "@/app/components/ui/Sidebar";
+import FlyerButton from "@/app/events/components/FlyerButton";
 import styles from "@/app/dashboard/dashboard.module.css";
 
 const LEMONTREE_API = "https://platform.foodhelpline.org";
@@ -176,6 +177,10 @@ export default function EventDetailPage() {
   useEffect(() => {
     if (token) fetchEvent(token);
   }, [token, fetchEvent]);
+
+  useEffect(() => {
+    if (event) document.title = `${event.title} — Lemontree Volunteers`;
+  }, [event]);
 
   // If user is the event leader, redirect to manage page
   useEffect(() => {
@@ -380,31 +385,34 @@ export default function EventDetailPage() {
                     </div>
                   </div>
 
-                  {/* Register / Cancel button */}
-                  {isActive && (
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                      {isRegistered ? (
-                        <button
-                          onClick={() => setShowConfirmCancel(true)}
-                          disabled={registering}
-                          style={{ padding: "12px 28px", fontSize: 14, fontWeight: 600, borderRadius: "var(--lt-radius-full)", border: "2px solid var(--lt-error)", background: "transparent", color: "var(--lt-error)", cursor: registering ? "not-allowed" : "pointer", opacity: registering ? 0.6 : 1 }}
-                        >
-                          {registering ? "Cancelling…" : "Cancel Registration"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleRegister}
-                          disabled={registering || (isFull ?? false)}
-                          style={{ padding: "12px 28px", fontSize: 14, fontWeight: 600, borderRadius: "var(--lt-radius-full)", border: "none", background: isFull ? "var(--lt-card-bg-muted)" : "var(--lt-purple)", color: isFull ? "var(--lt-text-muted)" : "white", cursor: (registering || isFull) ? "not-allowed" : "pointer", opacity: registering ? 0.6 : 1 }}
-                        >
-                          {registering ? "Registering…" : isFull ? "Event Full" : "Register →"}
-                        </button>
-                      )}
-                      {registerMsg && (
-                        <span style={{ fontSize: 13, color: registerMsg.includes("!") ? "var(--lt-teal)" : "var(--lt-error)", fontWeight: 500 }}>{registerMsg}</span>
-                      )}
-                    </div>
-                  )}
+                  {/* Actions */}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                    <FlyerButton eventId={event.id} />
+                    {isActive && (
+                      <>
+                        {isRegistered ? (
+                          <button
+                            onClick={() => setShowConfirmCancel(true)}
+                            disabled={registering}
+                            style={{ padding: "12px 28px", fontSize: 14, fontWeight: 600, borderRadius: "var(--lt-radius-full)", border: "2px solid var(--lt-error)", background: "transparent", color: "var(--lt-error)", cursor: registering ? "not-allowed" : "pointer", opacity: registering ? 0.6 : 1 }}
+                          >
+                            {registering ? "Cancelling…" : "Cancel Registration"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={handleRegister}
+                            disabled={registering || (isFull ?? false)}
+                            style={{ padding: "12px 28px", fontSize: 14, fontWeight: 600, borderRadius: "var(--lt-radius-full)", border: "none", background: isFull ? "var(--lt-card-bg-muted)" : "var(--lt-purple)", color: isFull ? "var(--lt-text-muted)" : "white", cursor: (registering || isFull) ? "not-allowed" : "pointer", opacity: registering ? 0.6 : 1 }}
+                          >
+                            {registering ? "Registering…" : isFull ? "Event Full" : "Register →"}
+                          </button>
+                        )}
+                        {registerMsg && (
+                          <span style={{ fontSize: 13, color: registerMsg.includes("!") ? "var(--lt-teal)" : "var(--lt-error)", fontWeight: 500 }}>{registerMsg}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Description */}

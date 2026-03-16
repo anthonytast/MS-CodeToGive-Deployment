@@ -161,6 +161,7 @@ export default function EditEventPage() {
   const params = useParams();
   const eventId = params?.id as string;
 
+
   const [form, setForm] = useState<Form>(INIT);
   const [busy, setBusy] = useState(false);
   const [loadingEvent, setLoadingEvent] = useState(true);
@@ -210,6 +211,7 @@ export default function EditEventPage() {
         );
         if (!res.ok) { setErr('Failed to load event.'); return; }
         const ev = await res.json();
+        document.title = `Edit: ${ev.title} — Lemontree Volunteers`;
         setForm({
           title:           ev.title ?? '',
           description:     ev.description ?? '',

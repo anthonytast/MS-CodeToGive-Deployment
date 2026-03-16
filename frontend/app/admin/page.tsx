@@ -89,6 +89,8 @@ function formatDate(dateStr?: string | null) {
 }
 
 export default function AdminPage() {
+  useEffect(() => { document.title = "Admin — Lemontree Volunteers"; }, []);
+
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("overview");

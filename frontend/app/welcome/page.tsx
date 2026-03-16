@@ -13,6 +13,8 @@ import dashStyles from "@/app/dashboard/dashboard.module.css";
 import Sidebar from "@/app/components/ui/Sidebar";
 
 export default function WelcomePage() {
+  useEffect(() => { document.title = "Welcome — Lemontree Volunteers"; }, []);
+
 // ===== PAGE UI STATE =====
   // controls sidebar visibility, search toggle, dropdown expansion,
   // map markers data, selected resource panel, and viewport position

@@ -8,6 +8,7 @@ import { Map, Marker } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import Sidebar from "@/app/components/ui/Sidebar";
+import FlyerButton from "@/app/events/components/FlyerButton";
 import styles from "@/app/dashboard/dashboard.module.css";
 
 const LEMONTREE_API = "https://platform.foodhelpline.org";
@@ -336,6 +337,10 @@ export default function ManageEventPage() {
   const total = activeSignups.length;
   const isOpen = event?.status === "active";
   const isCompleted = event?.status === "completed";
+
+  useEffect(() => {
+    if (event) document.title = `Manage: ${event.title} — Lemontree Volunteers`;
+  }, [event]);
   // ── Loading / Error states ─────────────────────────────────────────────
 
   if (!token) return null;
@@ -409,34 +414,37 @@ export default function ManageEventPage() {
                   )}
                 </div>
 
-                {/* ── Tab switcher (hidden when completed) ─── */}
-                {isCompleted ? (
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: "var(--lt-radius-full)", background: "var(--lt-teal)", color: "white", fontSize: 13, fontWeight: 700 }}>
-                    ✓ Event Completed
-                  </span>
-                ) : (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {(["pre", "during", "post"] as Tab[]).map(tab => (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        style={{
-                          padding: "8px 20px",
-                          borderRadius: "var(--lt-radius-full)",
-                          fontSize: 14,
-                          fontWeight: 600,
-                          border: "none",
-                          cursor: "pointer",
-                          transition: "var(--lt-transition)",
-                          backgroundColor: activeTab === tab ? "var(--lt-text-primary)" : "var(--lt-card-bg-muted)",
-                          color: activeTab === tab ? "white" : "var(--lt-text-secondary)",
-                        }}
-                      >
-                        {tab === "pre" ? "Pre-event" : tab === "during" ? "During event" : "Post-event"}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* ── Tab switcher + flyer ─── */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
+                  <FlyerButton eventId={event.id} />
+                  {isCompleted ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", borderRadius: "var(--lt-radius-full)", background: "var(--lt-teal)", color: "white", fontSize: 13, fontWeight: 700 }}>
+                      ✓ Event Completed
+                    </span>
+                  ) : (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {(["pre", "during", "post"] as Tab[]).map(tab => (
+                        <button
+                          key={tab}
+                          onClick={() => setActiveTab(tab)}
+                          style={{
+                            padding: "8px 20px",
+                            borderRadius: "var(--lt-radius-full)",
+                            fontSize: 14,
+                            fontWeight: 600,
+                            border: "none",
+                            cursor: "pointer",
+                            transition: "var(--lt-transition)",
+                            backgroundColor: activeTab === tab ? "var(--lt-text-primary)" : "var(--lt-card-bg-muted)",
+                            color: activeTab === tab ? "white" : "var(--lt-text-secondary)",
+                          }}
+                        >
+                          {tab === "pre" ? "Pre-event" : tab === "during" ? "During event" : "Post-event"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* ── PRE-EVENT ──────────────────────────────────── */}
