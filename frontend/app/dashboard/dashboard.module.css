@@ -121,6 +121,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 24px;
+  align-items: start;
+}
+
+.bottomGrid > * {
+  max-height: 380px;
+  overflow-y: auto;
 }
 
 /* ── Responsive ───────────────────────────────────────────────── */
