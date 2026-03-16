@@ -343,12 +343,15 @@ export default function DashboardPage() {
                   label="Upcoming Events"
                   colorClass="lt-stat-card__icon--purple-mid"
                 />
-                <StatsCard
-                  icon={<Image src="/coin.png" alt="Points Earned" width={28} height={28} />}
-                  value={stats.pointsEarned}
-                  label="Points Earned"
-                  colorClass="lt-stat-card__icon--purple-mid"
-                />
+                <Link href="/community/leaders" style={{ textDecoration: "none" }}>
+                  <StatsCard
+                    icon={<Image src="/coin.png" alt="Points Earned" width={28} height={28} />}
+                    value={stats.pointsEarned}
+                    label="Points Earned"
+                    colorClass="lt-stat-card__icon--purple-mid"
+                    hint="10 pts per volunteer hour"
+                  />
+                </Link>
               </div>
 
               {/* Bottom Grid: Upcoming Events + Leaderboard */}
