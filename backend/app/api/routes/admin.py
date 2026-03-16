@@ -397,7 +397,7 @@ async def update_signup_status(signup_id: str, body: UpdateSignupStatusRequest, 
             award_points(
                 db,
                 user_id=signup["user_id"],
-                action="event_attended",
+                action="events_attended",
                 points=points,
                 event_id=signup["event_id"],
                 description=f"Attended event ({points // 10}hr)",
