@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/app/components/ui/Sidebar";
 import CreateEventGuard from "@/app/components/ui/CreateEventGuard";
+import ResourceMap from "@/app/components/ui/ResourceMap";
 import { useEvents } from "./hooks/useEvents";
 import { useRegisterEvent } from "./hooks/useRegisterEvent";
 import { filterEvents } from "./utils/eventFilters";
@@ -38,6 +39,7 @@ export default function EventsPageClient() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showPast, setShowPast] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
 
   const [isAuthorized, setIsAuthorized] = useState<boolean>(USE_MOCK);
   const [currentUserId, setCurrentUserId] = useState<string>("");
@@ -187,12 +189,28 @@ export default function EventsPageClient() {
         </div>
 
         {/* Desktop filter bar */}
-        <div className={styles.filterBar}>
+        <div className={styles.filterBar} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <EventFilters
             filters={filters}
             onChange={handleFilterChange}
             onClear={handleClearFilters}
           />
+          <button
+            onClick={() => setMapOpen(true)}
+            style={{
+              flexShrink: 0,
+              padding: "8px 16px",
+              borderRadius: 8,
+              border: "1px solid var(--lt-border)",
+              background: "var(--lt-card-bg-white)",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Search by Map
+          </button>
         </div>
 
         {/* Events content */}
@@ -325,6 +343,43 @@ export default function EventsPageClient() {
                 }}
               />
             </div>
+          </div>
+        </>
+      )}
+      {/* Map modal */}
+      {mapOpen && (
+        <>
+          <div
+            onClick={() => setMapOpen(false)}
+            style={{
+              position: "fixed", inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              zIndex: 1000,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "min(1100px, 95vw)",
+              background: "var(--lt-card-bg-white)",
+              borderRadius: 16,
+              boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+              zIndex: 1001,
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--lt-border)" }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Food Resources Near You</span>
+              <button
+                onClick={() => setMapOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <ResourceMap height={620} />
           </div>
         </>
       )}
