@@ -11,8 +11,10 @@ export default function StatsCard({ icon, value, label, colorClass }: StatsCardP
   return (
     <div className="lt-stat-card">
       <div className={`lt-stat-card__icon ${colorClass}`}>{icon}</div>
-      <div className="lt-stat-card__value">{value.toLocaleString()}</div>
-      <div className="lt-stat-card__label">{label}</div>
+      <div>
+        <div className="lt-stat-card__value">{value.toLocaleString()}</div>
+        <div className="lt-stat-card__label">{label}</div>
+      </div>
     </div>
   );
 }
