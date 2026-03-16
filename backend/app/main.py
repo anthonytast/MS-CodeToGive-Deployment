@@ -8,7 +8,7 @@ from app.api.routes import auth, events, health, admin, signups, messages, photo
 app = FastAPI(title="MS CodeToGive API", version="0.1.0")
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
-_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000", "https://ms-code-to-give-deployment-tawny.vercel.app")
+_raw = os.getenv("CORS_ORIGINS", "http://localhost:3000,https://ms-code-to-give-deployment-tawny.vercel.app")
 _origins = [o.strip() for o in _raw.split(",") if o.strip()]
 
 app.add_middleware(
