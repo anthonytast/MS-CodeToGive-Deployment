@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -260,6 +260,10 @@ function getInitials(name: string) {
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 export default function CreateEventPage() {
+  return <Suspense><CreateEventContent /></Suspense>;
+}
+
+function CreateEventContent() {
   useEffect(() => { document.title = "Create Event — Lemontree Volunteers"; }, []);
 
   const router = useRouter();
