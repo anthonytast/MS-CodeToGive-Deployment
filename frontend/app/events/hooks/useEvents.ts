@@ -53,6 +53,7 @@ function mapApiEvent(api: ApiEvent, joinedIds: Set<string>): Event {
     status: api.status,
     flyerLanguage: api.flyer_language,
     createdBy: api.event_leader_id,
+    shareableLink: api.shareable_link,
   };
 }
 
@@ -129,11 +130,21 @@ export function useEvents(): UseEventsReturn {
         const joinedIds = new Set<string>(
           Array.isArray(joinedData) ? joinedData.map((e) => e.id) : []
         );
-        const mapped = Array.isArray(eventsData)
+
+        // Public events
+        const publicMapped = Array.isArray(eventsData)
           ? eventsData.map((e) => mapApiEvent(e, joinedIds))
           : [];
 
-        setEvents(mapped);
+        // Private events the user is registered for — not in the public list
+        const publicIds = new Set(publicMapped.map((e) => e.id));
+        const privateJoined = Array.isArray(joinedData)
+          ? joinedData
+              .filter((e) => e.visibility === "private" && !publicIds.has(e.id))
+              .map((e) => mapApiEvent(e, joinedIds))
+          : [];
+
+        setEvents([...publicMapped, ...privateJoined]);
       } catch (err) {
         if (!cancelled) setError(String(err));
       } finally {
