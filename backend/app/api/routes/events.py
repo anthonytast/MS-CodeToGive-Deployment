@@ -89,24 +89,52 @@ async def list_events(
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
 ):
-    query = get_supabase_admin().table("events").select("*").eq("visibility", "public")
+    sb = get_supabase_admin()
 
     if status_filter:
-        query = query.eq("status", status_filter)
-    else:
-        query = query.in_("status", ["upcoming", "active", "completed"])
+        rows = (
+            sb.table("events").select("*")
+            .eq("visibility", "public")
+            .eq("status", status_filter)
+            .order("date", desc=False)
+            .execute()
+            .data
+        )
+        if date_from:
+            rows = [r for r in rows if r["date"] >= date_from]
+        if date_to:
+            rows = [r for r in rows if r["date"] <= date_to]
+        offset = (page - 1) * limit
+        return rows[offset: offset + limit]
+
+    # No status filter: fetch ALL upcoming/active (never truncated) +
+    # only the most recent `limit` completed events (past events are secondary).
+    upcoming = (
+        sb.table("events").select("*")
+        .eq("visibility", "public")
+        .in_("status", ["upcoming", "active"])
+        .order("date", desc=False)
+        .execute()
+        .data
+    )
+    completed = (
+        sb.table("events").select("*")
+        .eq("visibility", "public")
+        .eq("status", "completed")
+        .order("date", desc=True)
+        .range(0, limit - 1)
+        .execute()
+        .data
+    )
+
+    rows = upcoming + completed
     if date_from:
-        query = query.gte("date", date_from)
+        rows = [r for r in rows if r["date"] >= date_from]
     if date_to:
-        query = query.lte("date", date_to)
-
-    offset = (page - 1) * limit
-    query = query.range(offset, offset + limit - 1)
-
-    result = query.execute()
-    return result.data
+        rows = [r for r in rows if r["date"] <= date_to]
+    return rows
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=EventResponse)
