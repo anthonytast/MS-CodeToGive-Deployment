@@ -18,7 +18,7 @@ import EmptyState from "./components/EmptyState";
 import styles from "./events.module.css";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
-const TODAY = "2026-03-15";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function isThisWeekDate(dateStr: string): boolean {
   const today = new Date(TODAY + "T00:00:00");
@@ -39,31 +39,23 @@ export default function EventsPageClient() {
   const [showPast, setShowPast] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
-  // Auth guard — lazy initializer avoids synchronous setState in effect
-  const [isAuthorized] = useState<boolean>(() => {
-    if (USE_MOCK) return true;
-    if (typeof window === "undefined") return false;
-    return !!localStorage.getItem("access_token");
-  });
-
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(USE_MOCK);
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
   useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    setIsAuthorized(true);
     try {
-      const token = localStorage.getItem("access_token");
-      if (!token) return;
       const id = JSON.parse(atob(token.split(".")[1])).sub ?? "";
       setCurrentUserId(id);
     } catch {
       // ignore
     }
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthorized) {
-      router.push("/login");
-    }
-  }, [isAuthorized, router]);
+  }, [router]);
 
   // Hero band collapse on scroll
   useEffect(() => {
@@ -133,9 +125,9 @@ export default function EventsPageClient() {
     const comingUp: typeof events = [];
 
     for (const ev of events) {
-      if (ev.status === "completed" || ev.date < TODAY) {
+      if (ev.status === "completed" || (ev.status !== "active" && ev.date < TODAY)) {
         past.push(ev);
-      } else if (isThisWeekDate(ev.date)) {
+      } else if (isThisWeekDate(ev.date) || ev.status === "active") {
         thisWeek.push(ev);
       } else {
         comingUp.push(ev);
