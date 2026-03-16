@@ -221,10 +221,16 @@ async def delete_event(event_id: str, current_user: CurrentUser):
     require_admin(current_user)
     admin = get_supabase_admin()
 
-    response = admin.table("events").delete().eq("id", event_id).execute()
-
-    if not response.data:
+    # Verify event exists before deleting
+    check = admin.table("events").select("id").eq("id", event_id).maybe_single().execute()
+    if not check.data:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    # Delete child rows first to avoid FK constraint violations
+    admin.table("event_signups").delete().eq("event_id", event_id).execute()
+    admin.table("event_messages").delete().eq("event_id", event_id).execute()
+    admin.table("event_photos").delete().eq("event_id", event_id).execute()
+    admin.table("events").delete().eq("id", event_id).execute()
 
     return {"success": True, "message": "Event deleted successfully"}
 
