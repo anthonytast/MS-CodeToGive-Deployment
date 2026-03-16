@@ -3,11 +3,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve .env relative to this file: backend/app/core/config.py → ../../.. → repo root
 _ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
+# Only use .env file if it exists (for local development)
+_ENV_FILE_TO_USE = _ENV_FILE if _ENV_FILE.exists() else None
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=_ENV_FILE,
+        env_file=_ENV_FILE_TO_USE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
