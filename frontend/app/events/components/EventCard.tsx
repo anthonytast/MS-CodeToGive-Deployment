@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Map, Marker } from "react-map-gl/maplibre";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -33,22 +34,11 @@ export default function EventCard({
   isLoadingId,
   currentUserId,
 }: Props) {
+  const router = useRouter();
   const gradient = eventGradient(event.title);
-  const [isVisible, setIsVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setIsVisible(true); },
-      { threshold: 0.1 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  const hasCoords = Boolean(event.latitude && event.longitude);
+  const hasCoords = event.latitude != null && event.longitude != null;
   const isFull =
     event.volunteerLimit != null && event.registeredCount >= event.volunteerLimit;
 
@@ -63,9 +53,10 @@ export default function EventCard({
     <div
       className={styles.card}
       style={{ "--card-index": cardIndex } as React.CSSProperties}
+      onClick={() => router.push(`/events/${event.id}`)}
     >
       <div ref={containerRef} className={styles.imageWrapper}>
-        {hasCoords && isVisible ? (
+        {hasCoords ? (
           <div className={styles.mapContainer}>
             <Map
               mapLib={maplibregl}
@@ -124,7 +115,7 @@ export default function EventCard({
           </span>
 
           {!isPast && (
-            <div className={styles.hoverActions}>
+            <div className={styles.hoverActions} onClick={(e) => e.stopPropagation()}>
               {event.latitude && event.longitude && (
                 <FlyerButton eventId={event.id} small />
               )}

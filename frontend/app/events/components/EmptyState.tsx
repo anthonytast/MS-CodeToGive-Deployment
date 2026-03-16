@@ -11,7 +11,6 @@ export default function EmptyState({
 }: Props) {
   return (
     <div className={styles.emptyState}>
-      <span className={styles.emptyStateIcon}>🍋</span>
       <p className={styles.emptyStateMsg}>{message}</p>
       {onClearFilters && (
         <button className={styles.emptyStateClear} onClick={onClearFilters}>

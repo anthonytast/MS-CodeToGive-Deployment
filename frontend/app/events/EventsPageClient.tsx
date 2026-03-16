@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import Sidebar from "@/app/components/ui/Sidebar";
+import CreateEventGuard from "@/app/components/ui/CreateEventGuard";
 import { useEvents } from "./hooks/useEvents";
 import { useRegisterEvent } from "./hooks/useRegisterEvent";
 import { filterEvents } from "./utils/eventFilters";
@@ -133,7 +133,7 @@ export default function EventsPageClient() {
     const comingUp: typeof events = [];
 
     for (const ev of events) {
-      if (ev.date < TODAY) {
+      if (ev.status === "completed" || ev.date < TODAY) {
         past.push(ev);
       } else if (isThisWeekDate(ev.date)) {
         thisWeek.push(ev);
@@ -188,9 +188,9 @@ export default function EventsPageClient() {
             className={styles.heroBandTestimonial}
           />
           <div className={styles.heroBandActions}>
-            <Link href="/events/create" className={styles.newEventBtn}>
+            <CreateEventGuard className={styles.newEventBtn}>
               + New Event
-            </Link>
+            </CreateEventGuard>
           </div>
         </div>
 
