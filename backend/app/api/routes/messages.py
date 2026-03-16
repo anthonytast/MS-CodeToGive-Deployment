@@ -86,7 +86,6 @@ async def list_messages(event_id: str, current_user: CurrentUser):
             .eq("event_id", event_id)
             .eq("user_id", current_user["sub"])
             .neq("status", "cancelled")
-            .maybe_single()
             .execute()
         )
         if not signup.data:
