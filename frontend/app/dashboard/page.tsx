@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/app/components/ui/Sidebar";
+import CreateEventGuard from "@/app/components/ui/CreateEventGuard";
 import StatsCard from "@/app/components/ui/StatsCard";
 import RecentImpactCarousel from "@/app/components/ui/RecentImpactCarousel";
 import UpcomingEventsTable from "@/app/components/ui/UpcomingEventsTable";
@@ -12,8 +13,9 @@ import LeaderboardPreview from "@/app/components/ui/LeaderboardPreview";
 import type {
   RecentEvent,
   UpcomingEvent,
+  LeaderboardEntry,
 } from "./mockData";
-import { MOCK_LEADERBOARD } from "./mockData";
+import ResourceMap from "@/app/components/ui/ResourceMap";
 import styles from "./dashboard.module.css";
 
 function getInitials(name: string) {
@@ -24,6 +26,8 @@ function getInitials(name: string) {
 }
 
 export default function DashboardPage() {
+  useEffect(() => { document.title = "Dashboard — Lemontree Volunteers"; }, []);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);
@@ -32,7 +36,9 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({ eventsAttended: 0, upcomingEvents: 0, pointsEarned: 0 });
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<UpcomingEvent[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [announcementToast, setAnnouncementToast] = useState<{ count: number; events: string[]; eventIds: string[] } | null>(null);
 
   useEffect(() => {
     const token = localStorage.getItem("access_token");
@@ -67,29 +73,42 @@ export default function DashboardPage() {
 
     async function fetchData() {
       try {
-        // 1. Fetch user data (Try JWT Payload first, then fallback to Auth API)
+        // 1. Fetch user data, points, and leaderboard in parallel
         let currentUserName = "Volunteer";
-        const points = 0;
+        let points = 0;
 
-        if (payload && "user_metadata" in payload && typeof payload.user_metadata === "object" && payload.user_metadata !== null) {
-          const meta = payload.user_metadata as Record<string, unknown>;
-          if (typeof meta.name === "string") {
-            currentUserName = meta.name;
-          }
-        } else {
-          if (!SUPABASE_URL) {
-            console.error("Missing NEXT_PUBLIC_SUPABASE_URL");
-          }
-          const userRes = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers });
-          if (userRes.ok) {
-            const authData = await userRes.json();
-            if (authData && authData.user_metadata && authData.user_metadata.name) {
-              currentUserName = authData.user_metadata.name;
-            }
-          } else {
-            console.error("Failed to fetch user:", userRes.status);
+        const [meRes, pointsRes, lbRes] = await Promise.all([
+          fetch(`${API_URL}/api/v1/auth/me`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/api/v1/points/me`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${API_URL}/api/v1/leaderboard?limit=4`),
+        ]);
+
+        if (meRes.ok) {
+          const meData = await meRes.json();
+          if (typeof meData.name === "string" && meData.name) {
+            currentUserName = meData.name;
           }
         }
+
+        if (pointsRes.ok) {
+          const ptData = await pointsRes.json();
+          if (typeof ptData.total_points === "number") points = ptData.total_points;
+        }
+
+        if (lbRes.ok) {
+          const lbData = await lbRes.json();
+          if (Array.isArray(lbData.leaders)) {
+            setLeaderboard(
+              lbData.leaders.map((l: { rank: number; name: string; total_points: number }) => ({
+                rank: l.rank,
+                name: l.name,
+                initials: getInitials(l.name),
+                points: l.total_points,
+              }))
+            );
+          }
+        }
+
         setUserState({ name: currentUserName, initials: getInitials(currentUserName) });
 
         // 2. Fetch joined events (from FastAPI)
@@ -112,10 +131,10 @@ export default function DashboardPage() {
         if (Array.isArray(joinedEvents)) {
           for (const ev of joinedEvents) {
             const evDate = new Date(ev.start_time || ev.date || Date.now());
-            if (evDate < now) {
+            if (evDate < now || ev.status === "completed") {
               past.push(ev);
             } else {
-              if (ev.status !== "cancelled") upcomingCount++;
+              if (ev.status !== "cancelled" && ev.status !== "completed") upcomingCount++;
             }
           }
         }
@@ -138,7 +157,9 @@ export default function DashboardPage() {
             time: timeString,
             location: ev.location_name || "Unknown Location",
             volunteersCount: ev.current_signup_count || 0,
-            imageGradient: gradients[i % gradients.length]
+            imageGradient: gradients[i % gradients.length],
+            latitude: ev.latitude ?? null,
+            longitude: ev.longitude ?? null,
           };
         });
         setRecentEvents(recentFormatted);
@@ -159,7 +180,7 @@ export default function DashboardPage() {
         // 4. Upcoming registered events (derived from joinedEvents already fetched)
         const upcomingFormatted = Array.isArray(joinedEvents)
           ? joinedEvents
-              .filter(ev => new Date(ev.start_time || ev.date || Date.now()) >= now && ev.status !== "cancelled")
+              .filter(ev => new Date(ev.start_time || ev.date || Date.now()) >= now && ev.status !== "cancelled" && ev.status !== "completed")
               .slice(0, 5)
               .map(ev => {
                 const d = new Date(ev.start_time || ev.date || Date.now());
@@ -174,7 +195,29 @@ export default function DashboardPage() {
           : [];
         setUpcomingEvents(upcomingFormatted);
 
-
+        // 5. Check for recent announcements on registered events
+        try {
+          const annRes = await fetch(`${API_URL}/api/v1/events/my/announcements`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (annRes.ok) {
+            const announcements = await annRes.json();
+            if (Array.isArray(announcements) && announcements.length > 0) {
+              // Only show if not dismissed in this session
+              const dismissed = sessionStorage.getItem("announcements_toast_dismissed");
+              if (!dismissed) {
+                const uniqueEventIds = [...new Set(announcements.map((a: { event_id: string }) => a.event_id))];
+                const eventTitles = Array.isArray(joinedEvents)
+                  ? (uniqueEventIds as string[]).map((id) => {
+                      const ev = joinedEvents.find((e: { id: string; title: string }) => e.id === id);
+                      return ev?.title ?? "an event";
+                    }).slice(0, 2)
+                  : [];
+                setAnnouncementToast({ count: announcements.length, events: eventTitles, eventIds: uniqueEventIds as string[] });
+              }
+            }
+          }
+        } catch { /* ignore */ }
 
       } catch (err) {
         console.error("Error fetching dashboard data", err);
@@ -228,6 +271,47 @@ export default function DashboardPage() {
         </div>
 
         {/* ── Main Content ────────────────────────────────── */}
+        {/* Announcement Toast */}
+        {announcementToast && (
+          <div style={{
+            position: "fixed", top: 20, right: 20, zIndex: 9999,
+            background: "var(--lt-teal)", color: "white",
+            borderRadius: "var(--lt-radius-lg)",
+            padding: "14px 18px",
+            maxWidth: 360,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+            display: "flex", alignItems: "flex-start", gap: 12,
+          }}>
+            <div
+              style={{ flex: 1, cursor: "pointer" }}
+              onClick={() => {
+                setAnnouncementToast(null);
+                sessionStorage.setItem("announcements_toast_dismissed", "1");
+                const dest = announcementToast.eventIds.length === 1
+                  ? `/events/${announcementToast.eventIds[0]}`
+                  : "/events";
+                router.push(dest);
+              }}
+            >
+              <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>
+                New announcements for your events
+              </div>
+              <div style={{ fontSize: 13, opacity: 0.9 }}>
+                {announcementToast.count} new message{announcementToast.count !== 1 ? "s" : ""} in{" "}
+                {announcementToast.events.join(", ")}
+                {announcementToast.events.length < 2 && announcementToast.count > 1 ? " and more" : ""}
+              </div>
+              <div style={{ fontSize: 11, opacity: 0.75, marginTop: 4 }}>Click to view →</div>
+            </div>
+            <button
+              onClick={() => { setAnnouncementToast(null); sessionStorage.setItem("announcements_toast_dismissed", "1"); }}
+              style={{ background: "none", border: "none", color: "white", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: 0, flexShrink: 0 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className={styles.dashboardContent}>
           {loading ? (
              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh" }}>
@@ -240,9 +324,9 @@ export default function DashboardPage() {
                 <h1 className={styles.welcomeHeading}>
                   Hey {userState.name.split(" ")[0]}!
                 </h1>
-                <Link href="/events/create" className={styles.newEventBtn}>
+                <CreateEventGuard className={styles.newEventBtn}>
                   + New Event
-                </Link>
+                </CreateEventGuard>
               </div>
 
               {/* Stats Cards */}
@@ -259,22 +343,15 @@ export default function DashboardPage() {
                   label="Upcoming Events"
                   colorClass="lt-stat-card__icon--purple-mid"
                 />
-                <StatsCard
-                  icon={<Image src="/coin.png" alt="Points Earned" width={28} height={28} />}
-                  value={stats.pointsEarned}
-                  label="Points Earned"
-                  colorClass="lt-stat-card__icon--purple-mid"
-                />
-              </div>
-
-              {/* Recent Impact Carousel */}
-              <div className={styles.recentImpactSection}>
-                <h2 className="lt-section-title">Your Recent Impact</h2>
-                {recentEvents.length > 0 ? (
-                  <RecentImpactCarousel events={recentEvents} />
-                ) : (
-                  <p className="lt-text-secondary">No recent events yet. Join an event to make an impact!</p>
-                )}
+                <Link href="/community/leaders" style={{ textDecoration: "none" }}>
+                  <StatsCard
+                    icon={<Image src="/coin.png" alt="Points Earned" width={28} height={28} />}
+                    value={stats.pointsEarned}
+                    label="Points Earned"
+                    colorClass="lt-stat-card__icon--purple-mid"
+                    hint="10 pts per volunteer hour"
+                  />
+                </Link>
               </div>
 
               {/* Bottom Grid: Upcoming Events + Leaderboard */}
@@ -287,7 +364,25 @@ export default function DashboardPage() {
                     )
                   }
                 />
-                <LeaderboardPreview entries={MOCK_LEADERBOARD} />
+                <LeaderboardPreview entries={leaderboard} />
+              </div>
+
+              {/* Food Resources Map */}
+              <div style={{ marginTop: 32 }}>
+                <h2 className="lt-section-title" style={{ marginBottom: 12 }}>Create / Volunteer for an Event</h2>
+                <div style={{ borderRadius: 12, overflow: "hidden", boxShadow: "0 2px 16px rgba(0,0,0,0.10)" }}>
+                  <ResourceMap height={440} />
+                </div>
+              </div>
+
+              {/* Recent Impact Carousel */}
+              <div className={styles.recentImpactSection} style={{ marginTop: 32 }}>
+                <h2 className="lt-section-title">Your Recent Impact</h2>
+                {recentEvents.length > 0 ? (
+                  <RecentImpactCarousel events={recentEvents} />
+                ) : (
+                  <p className="lt-text-secondary">No recent events yet. Join an event to make an impact!</p>
+                )}
               </div>
             </>
           )}

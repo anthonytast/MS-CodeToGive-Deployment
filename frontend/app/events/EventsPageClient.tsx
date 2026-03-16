@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import Sidebar from "@/app/components/ui/Sidebar";
+import CreateEventGuard from "@/app/components/ui/CreateEventGuard";
+import ResourceMap from "@/app/components/ui/ResourceMap";
 import { useEvents } from "./hooks/useEvents";
 import { useRegisterEvent } from "./hooks/useRegisterEvent";
 import { filterEvents } from "./utils/eventFilters";
@@ -18,7 +19,7 @@ import EmptyState from "./components/EmptyState";
 import styles from "./events.module.css";
 
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK_DATA === "true";
-const TODAY = "2026-03-15";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 function isThisWeekDate(dateStr: string): boolean {
   const today = new Date(TODAY + "T00:00:00");
@@ -38,32 +39,25 @@ export default function EventsPageClient() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [showPast, setShowPast] = useState(false);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
 
-  // Auth guard — lazy initializer avoids synchronous setState in effect
-  const [isAuthorized] = useState<boolean>(() => {
-    if (USE_MOCK) return true;
-    if (typeof window === "undefined") return false;
-    return !!localStorage.getItem("access_token");
-  });
-
+  const [isAuthorized, setIsAuthorized] = useState<boolean>(USE_MOCK);
   const [currentUserId, setCurrentUserId] = useState<string>("");
 
   useEffect(() => {
+    const token = localStorage.getItem("access_token");
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+    setIsAuthorized(true);
     try {
-      const token = localStorage.getItem("access_token");
-      if (!token) return;
       const id = JSON.parse(atob(token.split(".")[1])).sub ?? "";
       setCurrentUserId(id);
     } catch {
       // ignore
     }
-  }, []);
-
-  useEffect(() => {
-    if (!isAuthorized) {
-      router.push("/login");
-    }
-  }, [isAuthorized, router]);
+  }, [router]);
 
   // Hero band collapse on scroll
   useEffect(() => {
@@ -133,9 +127,9 @@ export default function EventsPageClient() {
     const comingUp: typeof events = [];
 
     for (const ev of events) {
-      if (ev.date < TODAY) {
+      if (ev.status === "completed" || (ev.status !== "active" && ev.date < TODAY)) {
         past.push(ev);
-      } else if (isThisWeekDate(ev.date)) {
+      } else if (isThisWeekDate(ev.date) || ev.status === "active") {
         thisWeek.push(ev);
       } else {
         comingUp.push(ev);
@@ -188,19 +182,35 @@ export default function EventsPageClient() {
             className={styles.heroBandTestimonial}
           />
           <div className={styles.heroBandActions}>
-            <Link href="/events/create" className={styles.newEventBtn}>
+            <CreateEventGuard className={styles.newEventBtn}>
               + New Event
-            </Link>
+            </CreateEventGuard>
           </div>
         </div>
 
         {/* Desktop filter bar */}
-        <div className={styles.filterBar}>
+        <div className={styles.filterBar} style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <EventFilters
             filters={filters}
             onChange={handleFilterChange}
             onClear={handleClearFilters}
           />
+          <button
+            onClick={() => setMapOpen(true)}
+            style={{
+              flexShrink: 0,
+              padding: "8px 16px",
+              borderRadius: 8,
+              border: "1px solid var(--lt-border)",
+              background: "var(--lt-card-bg-white)",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: 13,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Search by Map
+          </button>
         </div>
 
         {/* Events content */}
@@ -333,6 +343,43 @@ export default function EventsPageClient() {
                 }}
               />
             </div>
+          </div>
+        </>
+      )}
+      {/* Map modal */}
+      {mapOpen && (
+        <>
+          <div
+            onClick={() => setMapOpen(false)}
+            style={{
+              position: "fixed", inset: 0,
+              background: "rgba(0,0,0,0.45)",
+              zIndex: 1000,
+            }}
+          />
+          <div
+            style={{
+              position: "fixed",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "min(1100px, 95vw)",
+              background: "var(--lt-card-bg-white)",
+              borderRadius: 16,
+              boxShadow: "0 8px 40px rgba(0,0,0,0.18)",
+              zIndex: 1001,
+              overflow: "hidden",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: "1px solid var(--lt-border)" }}>
+              <span style={{ fontWeight: 700, fontSize: 16 }}>Food Resources Near You</span>
+              <button
+                onClick={() => setMapOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+            <ResourceMap height={620} />
           </div>
         </>
       )}

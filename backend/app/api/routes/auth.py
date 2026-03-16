@@ -149,6 +149,15 @@ async def refresh_token(body: RefreshRequest):
     }
 
 
+@router.get("/me")
+async def get_me(current_user: CurrentUser):
+    """Return the current user's profile including their role."""
+    result = get_supabase_admin().table("users").select("id, name, email, role").eq("id", current_user["sub"]).maybe_single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    return result.data
+
+
 @router.post("/logout")
 async def log_out(
     current_user: CurrentUser,

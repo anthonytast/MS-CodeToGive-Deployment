@@ -29,6 +29,18 @@ class MessageResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
+@router.get("/my/announcements", response_model=list[MessageResponse])
+async def get_my_announcements(current_user: CurrentUser):
+    """Get recent announcements for all events the current user is signed up for."""
+    db = get_supabase_admin()
+    signups = db.table("event_signups").select("event_id").eq("user_id", current_user["sub"]).neq("status", "cancelled").execute()
+    if not signups.data:
+        return []
+    event_ids = [s["event_id"] for s in signups.data]
+    result = db.table("event_messages").select("*").in_("event_id", event_ids).order("sent_at", desc=True).limit(20).execute()
+    return result.data or []
+
+
 @router.post("/{event_id}/messages", status_code=status.HTTP_201_CREATED, response_model=MessageResponse)
 async def send_message(event_id: str, body: SendMessageRequest, current_user: CurrentUser):
     """Send a message to all event volunteers — only the event leader can send."""
@@ -74,7 +86,6 @@ async def list_messages(event_id: str, current_user: CurrentUser):
             .eq("event_id", event_id)
             .eq("user_id", current_user["sub"])
             .neq("status", "cancelled")
-            .maybe_single()
             .execute()
         )
         if not signup.data:

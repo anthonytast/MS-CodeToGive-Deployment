@@ -221,10 +221,16 @@ async def delete_event(event_id: str, current_user: CurrentUser):
     require_admin(current_user)
     admin = get_supabase_admin()
 
-    response = admin.table("events").delete().eq("id", event_id).execute()
-
-    if not response.data:
+    # Verify event exists before deleting
+    check = admin.table("events").select("id").eq("id", event_id).maybe_single().execute()
+    if not check.data:
         raise HTTPException(status_code=404, detail="Event not found")
+
+    # Delete child rows first to avoid FK constraint violations
+    admin.table("event_signups").delete().eq("event_id", event_id).execute()
+    admin.table("event_messages").delete().eq("event_id", event_id).execute()
+    admin.table("event_photos").delete().eq("event_id", event_id).execute()
+    admin.table("events").delete().eq("id", event_id).execute()
 
     return {"success": True, "message": "Event deleted successfully"}
 
@@ -391,7 +397,7 @@ async def update_signup_status(signup_id: str, body: UpdateSignupStatusRequest, 
             award_points(
                 db,
                 user_id=signup["user_id"],
-                action="event_attended",
+                action="events_attended",
                 points=points,
                 event_id=signup["event_id"],
                 description=f"Attended event ({points // 10}hr)",

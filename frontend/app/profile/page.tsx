@@ -50,6 +50,8 @@ interface EventHistoryItem {
 }
 
 export default function ProfilePage() {
+  useEffect(() => { document.title = "Profile — Lemontree Volunteers"; }, []);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const router = useRouter();
   const [isAuthorized, setIsAuthorized] = useState(false);

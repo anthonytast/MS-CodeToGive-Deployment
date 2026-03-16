@@ -48,6 +48,8 @@ const LANGUAGE_OPTIONS = [
 
 /* ── Component ─────────────────────────────────────────────── */
 export default function SignUpPage() {
+  useEffect(() => { document.title = "Sign Up — Lemontree Volunteers"; }, []);
+
   // Account fields
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

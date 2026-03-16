@@ -16,18 +16,19 @@ export default function EventSectionHeader({
   onToggle,
 }: Props) {
   return (
-    <div className={styles.sectionHeader}>
+    <div
+      className={styles.sectionHeader}
+      onClick={collapsible ? onToggle : undefined}
+      style={collapsible ? { cursor: "pointer" } : undefined}
+      aria-expanded={collapsible ? isExpanded : undefined}
+      role={collapsible ? "button" : undefined}
+    >
       <span className={styles.sectionHeaderTitle}>{title}</span>
       <span className={styles.sectionHeaderCount}>{count}</span>
       {collapsible && (
-        <button
-          className={styles.sectionHeaderToggle}
-          onClick={onToggle}
-          aria-expanded={isExpanded}
-          aria-label={isExpanded ? "Collapse section" : "Expand section"}
-        >
+        <span className={styles.sectionHeaderToggle}>
           {isExpanded ? "▲" : "▼"}
-        </button>
+        </span>
       )}
     </div>
   );

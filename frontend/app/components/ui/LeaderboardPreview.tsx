@@ -11,6 +11,9 @@ export default function LeaderboardPreview({ entries }: LeaderboardPreviewProps)
   return (
     <div className="lt-panel">
       <h2 className="lt-section-title">Leaderboard</h2>
+      <p style={{ fontSize: 12, color: "var(--lt-text-secondary)", margin: "-4px 0 12px", fontStyle: "italic" }}>
+        Earn 10 pts per volunteer hour
+      </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {entries.map((entry) => (
           <div

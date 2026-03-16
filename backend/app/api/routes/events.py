@@ -1,5 +1,6 @@
 """Event routes — CRUD for flyering events."""
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
 import httpx
@@ -31,7 +32,7 @@ class EventCreate(BaseModel):
     pantry_mode: Literal["none", "nearby_resources", "single_resource"] = "none"
     resource_count: int | None = None     # used when pantry_mode = "nearby_resources"
     resource_id: str | None = None        # Lemontree API resource ID for single_resource mode
-    flyer_language: Literal["en", "es"] = "en"
+    flyer_language: Literal["en", "es", "fr", "pt", "it", "pl", "ht", "tl"] = "en"
 
 
 class EventUpdate(BaseModel):
@@ -49,7 +50,7 @@ class EventUpdate(BaseModel):
     pantry_mode: Literal["none", "nearby_resources", "single_resource"] | None = None
     resource_count: int | None = None
     resource_id: str | None = None
-    flyer_language: Literal["en", "es"] | None = None
+    flyer_language: Literal["en", "es", "fr", "pt", "it", "pl", "ht", "tl"] | None = None
 
 
 class EventResponse(BaseModel):
@@ -88,22 +89,52 @@ async def list_events(
     date_from: str | None = Query(default=None),
     date_to: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
 ):
-    query = get_supabase_admin().table("events").select("*").eq("visibility", "public")
+    sb = get_supabase_admin()
 
     if status_filter:
-        query = query.eq("status", status_filter)
+        rows = (
+            sb.table("events").select("*")
+            .eq("visibility", "public")
+            .eq("status", status_filter)
+            .order("date", desc=False)
+            .execute()
+            .data
+        )
+        if date_from:
+            rows = [r for r in rows if r["date"] >= date_from]
+        if date_to:
+            rows = [r for r in rows if r["date"] <= date_to]
+        offset = (page - 1) * limit
+        return rows[offset: offset + limit]
+
+    # No status filter: fetch ALL upcoming/active (never truncated) +
+    # only the most recent `limit` completed events (past events are secondary).
+    upcoming = (
+        sb.table("events").select("*")
+        .eq("visibility", "public")
+        .in_("status", ["upcoming", "active"])
+        .order("date", desc=False)
+        .execute()
+        .data
+    )
+    completed = (
+        sb.table("events").select("*")
+        .eq("visibility", "public")
+        .eq("status", "completed")
+        .order("date", desc=True)
+        .range(0, limit - 1)
+        .execute()
+        .data
+    )
+
+    rows = upcoming + completed
     if date_from:
-        query = query.gte("date", date_from)
+        rows = [r for r in rows if r["date"] >= date_from]
     if date_to:
-        query = query.lte("date", date_to)
-
-    offset = (page - 1) * limit
-    query = query.range(offset, offset + limit - 1)
-
-    result = query.execute()
-    return result.data
+        rows = [r for r in rows if r["date"] <= date_to]
+    return rows
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED, response_model=EventResponse)
@@ -120,7 +151,20 @@ async def create_event(body: EventCreate, current_user: CurrentUser):
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create event")
 
-    return result.data[0]
+    event = result.data[0]
+
+    # Auto-register the event leader as a volunteer
+    get_supabase_admin().table("event_signups").insert({
+        "event_id": event["id"],
+        "user_id": user_id,
+        "status": "registered",
+        "signed_up_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+
+    # Keep denormalized count in sync
+    get_supabase_admin().table("events").update({"current_signup_count": 1}).eq("id", event["id"]).execute()
+
+    return event
 
 
 # Get all events created by the current user, optionally filtered by status
@@ -156,6 +200,16 @@ async def get_my_joined_events(
         query = query.eq("status", status_filter)
 
     result = query.execute()
+    return result.data
+
+
+@router.get("/share/{token}", response_model=EventResponse)
+async def get_event_by_share_token(token: str):
+    """Resolve a share token to an event — no auth required, works for private events."""
+    shareable_link = f"/events/{token}"
+    result = get_supabase_admin().table("events").select("*").eq("shareable_link", shareable_link).maybe_single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
     return result.data
 
 

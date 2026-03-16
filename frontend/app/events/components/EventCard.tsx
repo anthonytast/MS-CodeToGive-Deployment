@@ -1,16 +1,25 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+
 import Link from "next/link";
-import { Map, Marker } from "react-map-gl/maplibre";
-import maplibregl from "maplibre-gl";
-import "maplibre-gl/dist/maplibre-gl.css";
+import { useRouter } from "next/navigation";
 import type { Event } from "@/app/types/event";
 import { eventGradient } from "../utils/eventGradient";
 import { highlightText } from "../utils/eventFilters";
 import RegisterButton from "./RegisterButton";
 import FlyerButton from "./FlyerButton";
 import styles from "./EventCard.module.css";
+
+function staticTileUrl(lat: number, lng: number, zoom = 14): string {
+  const z = zoom;
+  const x = Math.floor(((lng + 180) / 360) * Math.pow(2, z));
+  const latRad = (lat * Math.PI) / 180;
+  const y = Math.floor(
+    ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) *
+      Math.pow(2, z)
+  );
+  return `https://a.basemaps.cartocdn.com/rastertiles/voyager/${z}/${x}/${y}.png`;
+}
 
 interface Props {
   event: Event;
@@ -33,22 +42,9 @@ export default function EventCard({
   isLoadingId,
   currentUserId,
 }: Props) {
+  const router = useRouter();
   const gradient = eventGradient(event.title);
-  const [isVisible, setIsVisible] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setIsVisible(true); },
-      { threshold: 0.1 }
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
-
-  const hasCoords = Boolean(event.latitude && event.longitude);
+  const hasCoords = event.latitude != null && event.longitude != null;
   const isFull =
     event.volunteerLimit != null && event.registeredCount >= event.volunteerLimit;
 
@@ -63,28 +59,28 @@ export default function EventCard({
     <div
       className={styles.card}
       style={{ "--card-index": cardIndex } as React.CSSProperties}
+      onClick={() => router.push(`/events/${event.id}`)}
     >
-      <div ref={containerRef} className={styles.imageWrapper}>
-        {hasCoords && isVisible ? (
-          <div className={styles.mapContainer}>
-            <Map
-              mapLib={maplibregl}
-              initialViewState={{ longitude: event.longitude!, latitude: event.latitude!, zoom: 15 }}
-              style={{ width: "100%", height: "100%" }}
-              mapStyle="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
-              interactive={false}
-              attributionControl={false}
-            >
-              <Marker longitude={event.longitude!} latitude={event.latitude!}>
-                <div style={{
-                  width: 12, height: 12,
-                  background: "#2E8B7A",
-                  borderRadius: "50%",
-                  border: "2px solid #fff",
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
-                }} />
-              </Marker>
-            </Map>
+      <div className={styles.imageWrapper}>
+        {hasCoords ? (
+          <div className={styles.mapContainer} style={{ position: "relative", overflow: "hidden" }}>
+            <img
+              src={staticTileUrl(event.latitude!, event.longitude!)}
+              alt=""
+              style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+              draggable={false}
+            />
+            <div style={{
+              position: "absolute",
+              top: "50%", left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: 14, height: 14,
+              background: "#2E8B7A",
+              borderRadius: "50%",
+              border: "2.5px solid #fff",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+              pointerEvents: "none",
+            }} />
           </div>
         ) : (
           <div
@@ -124,7 +120,7 @@ export default function EventCard({
           </span>
 
           {!isPast && (
-            <div className={styles.hoverActions}>
+            <div className={styles.hoverActions} onClick={(e) => e.stopPropagation()}>
               {event.latitude && event.longitude && (
                 <FlyerButton eventId={event.id} small />
               )}

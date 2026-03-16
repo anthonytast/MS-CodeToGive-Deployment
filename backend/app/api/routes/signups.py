@@ -246,7 +246,7 @@ async def check_in_volunteer(event_id: str, signup_id: str, current_user: Curren
         award_points(
             db,
             user_id=signup["user_id"],
-            action="event_attended",
+            action="events_attended",
             points=points,
             event_id=event_id,
             description=f"Attended event ({points // 10}hr)",

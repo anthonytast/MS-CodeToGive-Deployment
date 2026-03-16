@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { apiFetch } from "@/app/lib/api";
+import CreateEventGuard from "./CreateEventGuard";
 
 interface NavItem {
   label: string;
@@ -13,19 +14,6 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  {
-    label: "Welcome",
-    href: "/welcome",
-    icon: (
-      <svg className="lt-sidebar__icon" viewBox="0 0 20 20" fill="currentColor">
-        <path
-          fillRule="evenodd"
-          d="M10 2a8 8 0 100 16 8 8 0 000-16zm6 8a5.978 5.978 0 01-1.528 3.988A7.96 7.96 0 0013 10a7.96 7.96 0 001.472-3.988A5.978 5.978 0 0116 10zM10 4c.9 1.1 1.5 2.5 1.5 4S10.9 10.9 10 12c-.9-1.1-1.5-2.5-1.5-4S9.1 5.1 10 4zM4 10c0-1.5.56-2.87 1.528-3.988A7.96 7.96 0 007 10a7.96 7.96 0 00-1.472 3.988A5.978 5.978 0 014 10zm6 6c-.9-1.1-1.5-2.5-1.5-4S9.1 9.1 10 8c.9 1.1 1.5 2.5 1.5 4S10.9 14.9 10 16z"
-          clipRule="evenodd"
-        />
-      </svg>
-    ),
-  },
   {
     label: "Dashboard",
     href: "/dashboard",
@@ -129,7 +117,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <div className="lt-sidebar__title">Menu</div>
         <nav className="lt-sidebar__nav">
           {visibleItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = item.href === "/events"
+              ? pathname === "/events" || (pathname.startsWith("/events/") && !pathname.startsWith("/events/create"))
+              : pathname === item.href;
+            if (item.href === "/events/create") {
+              return (
+                <CreateEventGuard
+                  key={item.href}
+                  className={`lt-sidebar__link${isActive ? " lt-sidebar__link--active" : ""}`}
+                  onBeforeNavigate={onClose}
+                >
+                  {item.icon}
+                  {item.label}
+                </CreateEventGuard>
+              );
+            }
             return (
               <Link
                 key={item.href}
@@ -147,7 +149,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <button
           onClick={handleLogout}
           className="lt-sidebar__link"
-          style={{ marginTop: "auto", color: "var(--lt-coral)", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left" }}
+          style={{ color: "var(--lt-coral)", background: "none", border: "none", cursor: "pointer", width: "100%", textAlign: "left", marginTop: 8 }}
         >
           <svg className="lt-sidebar__icon" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h6a1 1 0 100-2H4V5h5a1 1 0 100-2H3zm10.293 4.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 01-1.414-1.414L14.586 11H8a1 1 0 110-2h6.586l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />

@@ -41,6 +41,7 @@ export interface Event {
   status: string;
   flyerLanguage?: string;
   createdBy: string;
+  shareableLink?: string | null;
 }
 
 export interface FilterState {
