@@ -4,6 +4,8 @@ from datetime import datetime
 
 
 POINTS_PER_HOUR = 10
+LEADER_MULTIPLIER = 1.5   # Leaders earn 15 pts/hr vs volunteers' 10 pts/hr
+LEADER_BONUS_PER_ATTENDEE = 5  # Extra pts per volunteer who attended the event
 
 
 def calculate_event_points(start_time: str, end_time: str) -> int:
@@ -13,6 +15,15 @@ def calculate_event_points(start_time: str, end_time: str) -> int:
     end = datetime.strptime(end_time, fmt)
     hours = (end - start).total_seconds() / 3600
     return round(hours * POINTS_PER_HOUR)
+
+
+def calculate_leader_points(start_time: str, end_time: str) -> int:
+    """Points awarded to the event leader on completion (1.5x volunteer rate)."""
+    fmt = "%H:%M:%S"
+    start = datetime.strptime(start_time, fmt)
+    end = datetime.strptime(end_time, fmt)
+    hours = (end - start).total_seconds() / 3600
+    return round(hours * POINTS_PER_HOUR * LEADER_MULTIPLIER)
 
 
 def award_points(db, user_id: str, action: str, points: int, event_id: str | None = None, description: str | None = None):
