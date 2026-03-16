@@ -147,7 +147,11 @@ export default function AdminCharts({ part = "all" }: { part?: "top" | "bottom" 
               </Pie>
               <Tooltip
                 contentStyle={{ borderRadius: 8, border: "1px solid #e5e7eb", fontSize: 12 }}
-                formatter={(v: number, name: string) => [`${v} (${total ? Math.round(v / total * 100) : 0}%)`, name]}
+                formatter={(v: number | undefined, name: string | undefined) => {
+                  const value = v ?? 0;
+                  const displayName = name ?? '';
+                  return [`${value} (${total ? Math.round(value / total * 100) : 0}%)`, displayName];
+                }}
               />
             </PieChart>
           </ResponsiveContainer>
