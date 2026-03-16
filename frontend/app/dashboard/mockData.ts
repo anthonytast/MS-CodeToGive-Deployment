@@ -22,6 +22,8 @@ export interface RecentEvent {
   location: string;
   volunteersCount: number;
   imageGradient: string; // CSS gradient for the placeholder image card
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export const MOCK_RECENT_EVENTS: RecentEvent[] = [

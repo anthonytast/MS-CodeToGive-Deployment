@@ -86,67 +86,24 @@
 
 .carouselTrackWrapper {
   flex: 1;
-  overflow: hidden;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   border-radius: var(--lt-radius-md);
+}
+
+.carouselTrackWrapper::-webkit-scrollbar {
+  display: none;
 }
 
 .carouselTrack {
   display: flex;
   gap: 16px;
-  transition: transform 0.4s ease;
 }
 
 .carouselCard {
   min-width: calc(33.333% - 11px);
   flex-shrink: 0;
-  border-radius: var(--lt-radius-md);
-  overflow: hidden;
-  background: var(--lt-card-bg-white);
-  border: 1px solid var(--lt-border);
-  cursor: pointer;
-  transition: transform var(--lt-transition), box-shadow var(--lt-transition);
-}
-
-.carouselCard:hover {
-  transform: translateY(-3px);
-  box-shadow: var(--lt-shadow-elevated);
-}
-
-.carouselCardImage {
-  height: 160px;
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  padding: 12px;
-}
-
-.carouselCardDate {
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: var(--lt-radius-sm);
-  backdrop-filter: blur(4px);
-}
-
-.carouselCardInfo {
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.carouselCardTitle {
-  font-family: var(--font-dm-sans), 'DM Sans', sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--lt-text-primary);
-}
-
-.carouselCardLocation {
-  font-size: 13px;
-  color: var(--lt-text-secondary);
 }
 
 .carouselArrowLeft {

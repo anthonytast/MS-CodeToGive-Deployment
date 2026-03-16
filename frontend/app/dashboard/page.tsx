@@ -107,10 +107,10 @@ export default function DashboardPage() {
         if (Array.isArray(joinedEvents)) {
           for (const ev of joinedEvents) {
             const evDate = new Date(ev.start_time || ev.date || Date.now());
-            if (evDate < now) {
+            if (evDate < now || ev.status === "completed") {
               past.push(ev);
             } else {
-              if (ev.status !== "cancelled") upcomingCount++;
+              if (ev.status !== "cancelled" && ev.status !== "completed") upcomingCount++;
             }
           }
         }
@@ -133,7 +133,9 @@ export default function DashboardPage() {
             time: timeString,
             location: ev.location_name || "Unknown Location",
             volunteersCount: ev.current_signup_count || 0,
-            imageGradient: gradients[i % gradients.length]
+            imageGradient: gradients[i % gradients.length],
+            latitude: ev.latitude ?? null,
+            longitude: ev.longitude ?? null,
           };
         });
         setRecentEvents(recentFormatted);
@@ -154,7 +156,7 @@ export default function DashboardPage() {
         // 4. Upcoming registered events (derived from joinedEvents already fetched)
         const upcomingFormatted = Array.isArray(joinedEvents)
           ? joinedEvents
-              .filter(ev => new Date(ev.start_time || ev.date || Date.now()) >= now && ev.status !== "cancelled")
+              .filter(ev => new Date(ev.start_time || ev.date || Date.now()) >= now && ev.status !== "cancelled" && ev.status !== "completed")
               .slice(0, 5)
               .map(ev => {
                 const d = new Date(ev.start_time || ev.date || Date.now());
