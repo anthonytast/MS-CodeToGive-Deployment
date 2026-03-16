@@ -1,5 +1,6 @@
 """Event routes — CRUD for flyering events."""
 import uuid
+from datetime import datetime, timezone
 from typing import Literal
 
 import httpx
@@ -94,6 +95,8 @@ async def list_events(
 
     if status_filter:
         query = query.eq("status", status_filter)
+    else:
+        query = query.in_("status", ["upcoming", "active", "completed"])
     if date_from:
         query = query.gte("date", date_from)
     if date_to:
@@ -120,7 +123,20 @@ async def create_event(body: EventCreate, current_user: CurrentUser):
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create event")
 
-    return result.data[0]
+    event = result.data[0]
+
+    # Auto-register the event leader as a volunteer
+    get_supabase_admin().table("event_signups").insert({
+        "event_id": event["id"],
+        "user_id": user_id,
+        "status": "registered",
+        "signed_up_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
+
+    # Keep denormalized count in sync
+    get_supabase_admin().table("events").update({"current_signup_count": 1}).eq("id", event["id"]).execute()
+
+    return event
 
 
 # Get all events created by the current user, optionally filtered by status
@@ -156,6 +172,16 @@ async def get_my_joined_events(
         query = query.eq("status", status_filter)
 
     result = query.execute()
+    return result.data
+
+
+@router.get("/share/{token}", response_model=EventResponse)
+async def get_event_by_share_token(token: str):
+    """Resolve a share token to an event — no auth required, works for private events."""
+    shareable_link = f"/events/{token}"
+    result = get_supabase_admin().table("events").select("*").eq("shareable_link", shareable_link).maybe_single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Event not found")
     return result.data
 
 
