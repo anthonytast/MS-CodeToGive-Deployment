@@ -26,6 +26,11 @@ export const metadata: Metadata = {
   },
   description:
     "Organize flyering events, auto-generate branded flyers, and track collective impact with Lemontree.",
+  icons: {
+    icon: "/logo_icon.svg",
+    shortcut: "/logo_icon.svg",
+    apple: "/logo_icon.svg",
+  },
 };
 
 export default function RootLayout({
